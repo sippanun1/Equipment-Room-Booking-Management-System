@@ -5,7 +5,7 @@ import { db } from "../../../firebase/firebase"
 import Header from "../../../components/Header"
 import { useAuth } from "../../../hooks/useAuth"
 import { logBorrowTransaction } from "../../../utils/borrowReturnLogger"
-import { getAvailableAssetInstances, markAssetInstancesAsBorrowed } from "../../../utils/equipmentHelper"
+import { getAvailableAssetInstances, markAssetInstancesAsBorrowed, invalidateEquipmentCache } from "../../../utils/equipmentHelper"
 import type { SelectedEquipment } from "../../../App"
 
 interface ConfirmSummaryProps {
@@ -205,6 +205,9 @@ export default function ConfirmSummary({ cartItems }: ConfirmSummaryProps) {
           await markAssetInstancesAsBorrowed(selectedInstanceIds)
         }
       }
+
+      // Clear equipment cache so next borrow shows updated quantities
+      invalidateEquipmentCache()
 
       // Navigate to completion page
       navigate('/borrow/completion')
