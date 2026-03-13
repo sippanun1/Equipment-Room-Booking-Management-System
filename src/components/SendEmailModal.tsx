@@ -25,6 +25,13 @@ export default function SendEmailModal({ isOpen, borrowData, onClose }: SendEmai
     try {
       const equipmentNames = borrowData.equipmentItems.map(item => `${item.equipmentName} (${item.quantityBorrowed} ชิ้น)`)
       
+      // Build equipment with codes for assets
+      const equipmentWithCodes = borrowData.equipmentItems.map(item => ({
+        name: item.equipmentName,
+        codes: item.assetCodes && item.assetCodes.length > 0 ? item.assetCodes : undefined,
+        quantity: item.quantityBorrowed
+      }))
+      
       const result = await sendBorrowAcknowledgmentEmail({
         userEmail: borrowData.userEmail,
         userName: borrowData.userName,
@@ -33,7 +40,8 @@ export default function SendEmailModal({ isOpen, borrowData, onClose }: SendEmai
         borrowTime: borrowData.borrowTime,
         expectedReturnDate: borrowData.expectedReturnDate,
         expectedReturnTime: borrowData.expectedReturnTime || '',
-        borrowType: getBorrowTypeText(borrowData.borrowType)
+        borrowType: getBorrowTypeText(borrowData.borrowType),
+        equipmentWithCodes
       })
 
       if (result.success) {

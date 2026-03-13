@@ -684,6 +684,12 @@ export default function BorrowReturnHistory() {
                           // Send email to borrower
                           const equipmentNames = detailsModal.equipmentItems.map(item => `${item.equipmentName} (${item.quantityBorrowed})`).join(", ")
                           try {
+                            const equipmentWithCodes = detailsModal.equipmentItems.map(item => ({
+                              name: item.equipmentName,
+                              codes: item.assetCodes && item.assetCodes.length > 0 ? item.assetCodes : undefined,
+                              quantity: item.quantityBorrowed
+                            }))
+                            
                             await sendBorrowAcknowledgmentEmail({
                               userEmail: detailsModal.userEmail,
                               userName: detailsModal.userName,
@@ -692,7 +698,8 @@ export default function BorrowReturnHistory() {
                               borrowTime: detailsModal.borrowTime,
                               expectedReturnDate: detailsModal.expectedReturnDate,
                               expectedReturnTime: detailsModal.expectedReturnTime || '',
-                              borrowType: getBorrowTypeText(detailsModal.borrowType)
+                              borrowType: getBorrowTypeText(detailsModal.borrowType),
+                              equipmentWithCodes
                             })
                           } catch (emailError) {
                             console.error("Error sending email:", emailError)

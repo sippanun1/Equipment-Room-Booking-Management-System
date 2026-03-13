@@ -16,6 +16,11 @@ export interface BorrowEmailData {
   expectedReturnDate: string
   expectedReturnTime?: string
   borrowType: string
+  equipmentWithCodes?: Array<{
+    name: string
+    codes?: string[]
+    quantity: number
+  }>
 }
 
 export interface RoomBookingEmailData {
@@ -34,6 +39,17 @@ export interface RoomBookingEmailData {
 
 export async function sendBorrowAcknowledgmentEmail(data: BorrowEmailData): Promise<{ success: boolean; message: string }> {
   try {
+    // Generate equipment list HTML with serial codes if available
+    const equipmentHTML = data.equipmentWithCodes
+      ? data.equipmentWithCodes
+          .map(eq => 
+            eq.codes && eq.codes.length > 0
+              ? `<p><strong>• ${eq.name}</strong> - ${eq.codes.join(', ')} (${eq.quantity} ชิ้น)</p>`
+              : `<p><strong>• ${eq.name}</strong> (${eq.quantity} ชิ้น)</p>`
+          )
+          .join('')
+      : `<p><strong>อุปกรณ์:</strong> ${data.equipmentNames.join(', ')}</p>`
+
     await addDoc(collection(db, 'mail'), {
       to: data.userEmail,
       message: {
@@ -43,7 +59,10 @@ export async function sendBorrowAcknowledgmentEmail(data: BorrowEmailData): Prom
             <h2 style="color: #333;">📋 ยืนยันการยืมอุปกรณ์</h2>
             <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
               <p><strong>ชื่อผู้ใช้:</strong> ${data.userName}</p>
-              <p><strong>อุปกรณ์:</strong> ${data.equipmentNames.join(', ')}</p>
+              <div style="margin: 15px 0;">
+                <strong style="display: block; margin-bottom: 8px;">อุปกรณ์:</strong>
+                ${equipmentHTML}
+              </div>
               <p><strong>วันที่ยืม:</strong> ${data.borrowDate} ${data.borrowTime}</p>
               <p><strong>วันคืนคาดว่า:</strong> ${data.expectedReturnDate} ${data.expectedReturnTime || ''}</p>
               <p><strong>ประเภทการยืม:</strong> ${data.borrowType}</p>

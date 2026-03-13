@@ -35,6 +35,7 @@ export default function EquipmentConditionReport() {
   const [newCondition, setNewCondition] = useState<string>('')
   const [newNotes, setNewNotes] = useState<string>('')
   const [isSaving, setIsSaving] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchEquipmentConditions = async () => {
@@ -402,11 +403,14 @@ export default function EquipmentConditionReport() {
         setNewCondition('')
         setNewNotes('')
         
-        alert('อัปเดตสภาพอุปกรณ์สำเร็จ')
+        // Show success message
+        setSuccessMessage('อัปเดตสภาพอุปกรณ์สำเร็จ')
+        setTimeout(() => setSuccessMessage(null), 3000)
       }
     } catch (error) {
       console.error("Error updating condition:", error)
-      alert('เกิดข้อผิดพลาดในการอัปเดต')
+      setSuccessMessage('เกิดข้อผิดพลาดในการอัปเดต')
+      setTimeout(() => setSuccessMessage(null), 3000)
     } finally {
       setIsSaving(false)
     }
@@ -423,6 +427,21 @@ export default function EquipmentConditionReport() {
     >
       {/* ===== HEADER ===== */}
       <Header title="สรุปสภาพอุปกรณ์/ครุภัณฑ์" />
+
+      {/* ===== SUCCESS TOAST ===== */}
+      {successMessage && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className={`
+            px-6 py-3 rounded-lg shadow-lg font-medium text-white
+            ${successMessage.includes('เกิดข้อผิดพลาด') 
+              ? 'bg-red-500' 
+              : 'bg-green-500'
+            }
+          `}>
+            {successMessage}
+          </div>
+        </div>
+      )}
 
       {/* ===== CONTENT ===== */}
       <div className="mt-6 flex justify-center">
