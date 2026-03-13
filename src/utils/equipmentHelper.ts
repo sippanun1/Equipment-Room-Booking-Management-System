@@ -225,7 +225,7 @@ export async function addNewAsset(
   try {
     const name = `${nameThai}${nameEnglish ? ` (${nameEnglish})` : ''}`
 
-    // 1. Create master record
+    // 1. Create master record with initial quantity and available count
     const masterRef = await addDoc(collection(db, 'equipmentMaster'), {
       name,
       category: 'asset',
@@ -233,6 +233,8 @@ export async function addNewAsset(
       equipmentTypes,
       equipmentSubTypes,
       picture: picture || null,
+      quantity: serialCodes.length,
+      available: serialCodes.length,
       createdAt: new Date().toISOString()
     })
 
@@ -280,6 +282,7 @@ export async function addAssetStock(
     }
 
     const masterId = masterSnapshot.docs[0].id
+    const masterData = masterSnapshot.docs[0].data()
 
     // 2. Add instance records for each new serial code using batch write
     const batch = writeBatch(db)
@@ -293,6 +296,15 @@ export async function addAssetStock(
         createdAt: new Date().toISOString()
       })
     }
+
+    // 3. Update master's quantity and available to reflect new instances
+    const currentQuantity = masterData.quantity || 0
+    const currentAvailable = masterData.available || 0
+    batch.update(doc(db, 'equipmentMaster', masterId), {
+      quantity: currentQuantity + serialCodes.length,
+      available: currentAvailable + serialCodes.length
+    })
+
     await batch.commit()
 
     // Invalidate cache after adding stock
