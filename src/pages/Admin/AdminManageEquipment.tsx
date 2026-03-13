@@ -5,7 +5,7 @@ import { db } from "../../firebase/firebase"
 import Header from "../../components/Header"
 import { useAuth } from "../../hooks/useAuth"
 import { logAdminAction } from "../../utils/adminLogger"
-import { loadAllEquipment, addNewAsset, addAssetStock, addNewConsumable, addConsumableStock, deleteEquipment, updateEquipmentMetadata } from "../../utils/equipmentHelper"
+import { loadAllEquipment, addNewAsset, addAssetStock, addNewConsumable, addConsumableStock, deleteEquipment, updateEquipmentMetadata, syncMasterAvailableCount } from "../../utils/equipmentHelper"
 
 // Low stock threshold for consumables (in units)
 const LOW_STOCK_THRESHOLD = 10
@@ -94,11 +94,12 @@ export default function AdminManageEquipment() {
   const [showAddStockConfirmModal, setShowAddStockConfirmModal] = useState(false)
   const [showAssetEditModal, setShowAssetEditModal] = useState(false)
   const [assetIdsForItem, setAssetIdsForItem] = useState<string[]>([])
-  const [assetCodesForItem, setAssetCodesForItem] = useState<{ docId: string; serialCode: string; sourceCollection: 'assetInstances' | 'equipment' }[]>([])
+  const [assetCodesForItem, setAssetCodesForItem] = useState<{ docId: string; serialCode: string; sourceCollection: 'assetInstances' | 'equipment'; available?: boolean; condition?: string }[]>([])
   const [selectedAssetIdToDelete, setSelectedAssetIdToDelete] = useState("")
   const [selectedEquipmentId, setSelectedEquipmentId] = useState("")
   const [assetEditNameThai, setAssetEditNameThai] = useState("")
   const [assetEditNameEnglish, setAssetEditNameEnglish] = useState("")
+  const [equipmentMasterId, setEquipmentMasterId] = useState<string>("")
   const [assetEditCodesMarkedForDelete, setAssetEditCodesMarkedForDelete] = useState<string[]>([])
   const [assetEditPicture, setAssetEditPicture] = useState<string | undefined>(undefined)
   const [assetEditTypes, setAssetEditTypes] = useState<string[]>([])
@@ -197,7 +198,7 @@ export default function AdminManageEquipment() {
 
   // Load equipment from Firestore on mount
   useEffect(() => {
-    loadEquipment()
+    loadEquipment(true) // Force skip cache on mount
   }, [])
 
   const categories = [
@@ -225,11 +226,11 @@ export default function AdminManageEquipment() {
     
     return Object.entries(grouped).map(([_name, items]) => {
       if (items[0].category === "asset") {
-        // For assets, show as one item with total quantity
+        // For assets, use quantity from loadAllEquipment (already counts instances correctly)
         return {
           ...items[0],
-          quantity: items.length,
-          allIds: items.map(i => i.id)
+          quantity: items[0].quantity, // Use the quantity from loadAllEquipment, not items.length
+          allIds: items[0].allIds || [] // Use the instance IDs from loadAllEquipment
         }
       }
       // For consumables, return each separately
@@ -370,50 +371,56 @@ export default function AdminManageEquipment() {
   }
 
   const handleIssue = async (equipmentName: string, itemAllIds: any) => {
+    console.log("handleIssue called:", { equipmentName, itemAllIds, itemAllIdsLength: itemAllIds.length })
     const isAsset = equipment.find(e => e.name === equipmentName)?.category === "asset"
+    console.log("isAsset:", isAsset)
     
     // If asset with multiple IDs, show asset edit modal
     if (isAsset && itemAllIds.length > 1) {
+      console.log("Asset with multiple IDs detected, loading codes...")
       setAssetIdsForItem(itemAllIds)
       setSelectedEquipmentId(equipmentName)
       
       // Fetch full equipment data to get serialCodes from assetInstances (new structure)
       try {
-        // Check both assetInstances (new) and equipment (old) collections
-        const [assetInstancesSnap, equipmentSnap] = await Promise.all([
-          getDocs(collection(db, "assetInstances")),
-          getDocs(collection(db, "equipment"))
-        ])
+        // Get the equipment item to access the master ID
+        const equipmentItem = equipment.find(e => e.name === equipmentName)
+        const masterIdForAsset = equipmentItem?.id // The master ID is the equipment item's id
         
-        const codes: { docId: string; serialCode: string; sourceCollection: 'assetInstances' | 'equipment' }[] = []
+        console.log("Master ID:", masterIdForAsset)
         
-        // Check assetInstances first (new structure)
-        assetInstancesSnap.forEach((docSnap) => {
-          if (itemAllIds.includes(docSnap.id)) {
-            codes.push({
-              docId: docSnap.id,
-              serialCode: docSnap.data().serialCode || docSnap.id,
-              sourceCollection: 'assetInstances'
-            })
-          }
-        })
-        
-        // Fallback to equipment collection if needed (backward compatibility)
-        if (codes.length === 0) {
-          equipmentSnap.forEach((docSnap) => {
-            if (itemAllIds.includes(docSnap.id)) {
-              codes.push({
-                docId: docSnap.id,
-                serialCode: docSnap.data().serialCode || docSnap.id,
-                sourceCollection: 'equipment'
-              })
-            }
-          })
+        if (!masterIdForAsset) {
+          console.error("Could not find master ID for equipment:", equipmentName)
+          setAssetCodesForItem([])
+          return
         }
         
+        // Store master ID for later sync operations
+        setEquipmentMasterId(masterIdForAsset)
+        
+        // Check assetInstances to get all serial codes for this equipment master
+        const assetInstancesSnap = await getDocs(
+          query(collection(db, "assetInstances"), where("equipmentId", "==", masterIdForAsset))
+        )
+        
+        const codes: { docId: string; serialCode: string; sourceCollection: 'assetInstances' | 'equipment'; available?: boolean; condition?: string }[] = []
+        
+        // Load from assetInstances (new structure)
+        assetInstancesSnap.forEach((docSnap) => {
+          codes.push({
+            docId: docSnap.id,
+            serialCode: docSnap.data().serialCode || docSnap.id,
+            available: docSnap.data().available !== false, // Default true if not set
+            condition: docSnap.data().condition || 'ปกติ',
+            sourceCollection: 'assetInstances'
+          })
+        })
+        
+        console.log(`Loaded ${codes.length} serial codes for master ID: ${masterIdForAsset}`, codes)
         setAssetCodesForItem(codes)
       } catch (error) {
         console.error("Error fetching asset codes:", error)
+        setAssetCodesForItem([])
       }
       
       // Extract Thai and English names
@@ -1202,9 +1209,18 @@ export default function AdminManageEquipment() {
 
                   {/* Quantity with Low Stock Indicator */}
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs text-gray-600">
-                      จำนวนอุปกรณ์ {item.quantity} {item.unit || "ชิ้น"}
-                    </p>
+                    <div className="text-xs text-gray-600">
+                      <p>จำนวนอุปกรณ์: {item.quantity} {item.unit || "ชิ้น"}</p>
+                      {item.category === "asset" && item.availableCount !== undefined && (
+                        <p className={`mt-1 font-semibold ${
+                          item.availableCount === item.quantity ? 'text-green-600' :
+                          item.availableCount === 0 ? 'text-red-600' :
+                          'text-orange-600'
+                        }`}>
+                          พร้อมใช้: {item.availableCount}/{item.quantity}
+                        </p>
+                      )}
+                    </div>
                     {item.category === "consumable" && (
                       <>
                         {item.quantity === 0 && (
@@ -1932,36 +1948,54 @@ export default function AdminManageEquipment() {
                   รายการรหัสอุปกรณ์ 
                   <span className="text-orange-600">({assetCodesForItem.filter(c => c.serialCode.toLowerCase().includes(assetCodeSearchTerm.toLowerCase())).length} รายการ)</span>
                 </label>
-                <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50 max-h-80 overflow-y-auto">
-                  {assetCodesForItem
-                    .filter(c => c.serialCode.toLowerCase().includes(assetCodeSearchTerm.toLowerCase()))
-                    .map((codeItem, idx) => {
-                    const isEditing = editingCodeId === codeItem.docId
-                    
-                    return (
-                      <div
-                        key={idx}
-                        className={`flex items-center justify-between p-4 border-b border-gray-200 last:border-b-0 transition ${
-                          isEditing ? "bg-blue-50" : "bg-white hover:bg-orange-50"
-                        }`}
-                      >
-                        <div className="flex-1">
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              value={editingCodeValue}
-                              onChange={(e) => setEditingCodeValue(e.target.value)}
-                              className="w-full px-3 py-1.5 border border-orange-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
-                              autoFocus
-                            />
-                          ) : (
-                            <div className="text-sm font-semibold text-gray-800">
-                              {codeItem.serialCode}
-                            </div>
-                          )}
-                        </div>
+                <div className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50 max-h-96 overflow-y-auto">
+                  {assetCodesForItem.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">
+                      <div className="text-sm mb-2">ไม่พบรหัสอุปกรณ์</div>
+                      <div className="text-xs text-gray-400">กำลังโหลดข้อมูล... หรือไม่มีรหัสในฐานข้อมูล</div>
+                    </div>
+                  ) : (
+                    assetCodesForItem
+                      .filter(c => c.serialCode.toLowerCase().includes(assetCodeSearchTerm.toLowerCase()))
+                      .map((codeItem, idx) => {
+                      const isEditing = editingCodeId === codeItem.docId
+                      
+                      return (
+                        <div
+                          key={idx}
+                          className={`flex items-center justify-between p-4 border-b border-gray-200 last:border-b-0 transition ${
+                            isEditing ? "bg-blue-50" : "bg-white hover:bg-orange-50"
+                          }`}
+                        >
+                          <div className="flex-1">
+                            {isEditing ? (
+                              <input
+                                type="text"
+                                value={editingCodeValue}
+                                onChange={(e) => setEditingCodeValue(e.target.value)}
+                                className="w-full px-3 py-1.5 border border-orange-400 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
+                                autoFocus
+                              />
+                            ) : (
+                              <div className="flex flex-col gap-1">
+                                <div className="text-sm font-semibold text-gray-800">
+                                  {codeItem.serialCode}
+                                </div>
+                                <div className="flex gap-2 flex-wrap">
+                                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                                    codeItem.available ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                  }`}>
+                                    {codeItem.available ? '✓ พร้อมใช้' : '✗ ไม่พร้อมใช้'}
+                                  </span>
+                                  <span className="text-xs px-2 py-1 rounded-full font-medium bg-blue-100 text-blue-700">
+                                    {codeItem.condition || 'ปกติ'}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
 
-                        <div className="flex gap-2 ml-4">
+                          <div className="flex gap-1 ml-4 flex-wrap justify-end">
                           {isEditing ? (
                             <>
                               <button
@@ -2018,13 +2052,63 @@ export default function AdminManageEquipment() {
                                   setEditingCodeId(codeItem.docId)
                                   setEditingCodeValue(codeItem.serialCode)
                                 }}
-                                className="px-3 py-1.5 rounded-full text-xs font-medium border border-gray-300 text-gray-700 hover:bg-orange-50 hover:border-orange-300 transition"
+                                className="px-2 py-1.5 rounded-full text-xs font-medium border border-gray-300 text-gray-700 hover:bg-orange-50 hover:border-orange-300 transition"
                               >
-                                แก้ไข
+                                แก้ไขรหัส
                               </button>
                               <button
+                                onClick={async () => {
+                                  try {
+                                    await updateDoc(doc(db, codeItem.sourceCollection, codeItem.docId), {
+                                      available: !codeItem.available
+                                    })
+                                    setAssetCodesForItem(assetCodesForItem.map(c =>
+                                      c.docId === codeItem.docId ? { ...c, available: !c.available } : c
+                                    ))
+                                    // Sync master available count after changing instance availability
+                                    if (equipmentMasterId) {
+                                      await syncMasterAvailableCount(equipmentMasterId)
+                                    }
+                                  } catch (error) {
+                                    console.error("Error updating availability:", error)
+                                  }
+                                }}
+                                className={`px-2 py-1.5 rounded-full text-xs font-medium transition ${
+                                  codeItem.available 
+                                    ? 'border border-green-300 text-green-600 hover:bg-green-50' 
+                                    : 'border border-red-300 text-red-600 hover:bg-red-50'
+                                }`}
+                              >
+                                {codeItem.available ? '✓ พร้อม' : '✗ ไม่พร้อม'}
+                              </button>
+                              <select
+                                value={codeItem.condition || 'ปกติ'}
+                                onChange={async (e) => {
+                                  const newCondition = e.target.value
+                                  try {
+                                    await updateDoc(doc(db, codeItem.sourceCollection, codeItem.docId), {
+                                      condition: newCondition
+                                    })
+                                    setAssetCodesForItem(assetCodesForItem.map(c =>
+                                      c.docId === codeItem.docId ? { ...c, condition: newCondition } : c
+                                    ))
+                                    // Sync master available count after condition change may affect availability
+                                    if (equipmentMasterId) {
+                                      await syncMasterAvailableCount(equipmentMasterId)
+                                    }
+                                  } catch (error) {
+                                    console.error("Error updating condition:", error)
+                                  }
+                                }}
+                                className="px-2 py-1.5 rounded text-xs font-medium border border-gray-300 text-gray-700 hover:border-blue-300 transition"
+                              >
+                                <option value="ปกติ">ปกติ</option>
+                                <option value="ชำรุด">ชำรุด</option>
+                                <option value="สูญหาย">สูญหาย</option>
+                              </select>
+                              <button
                                 onClick={() => handleAssetEditCodeDelete(codeItem.docId)}
-                                className="px-3 py-1.5 rounded-full text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 hover:border-red-500 transition"
+                                className="px-2 py-1.5 rounded-full text-xs font-medium border border-red-300 text-red-600 hover:bg-red-50 hover:border-red-500 transition"
                               >
                                 ลบ
                               </button>
@@ -2033,8 +2117,9 @@ export default function AdminManageEquipment() {
                         </div>
                       </div>
                     )
-                  })}
-                  {assetIdsForItem.filter(id => id.toLowerCase().includes(assetCodeSearchTerm.toLowerCase())).length === 0 && (
+                  })
+                  )}
+                  {assetCodesForItem.length > 0 && assetCodesForItem.filter(c => c.serialCode.toLowerCase().includes(assetCodeSearchTerm.toLowerCase())).length === 0 && (
                     <div className="p-6 text-center text-gray-500 text-sm">
                       ไม่พบรหัสอุปกรณ์ที่ค้นหา
                     </div>

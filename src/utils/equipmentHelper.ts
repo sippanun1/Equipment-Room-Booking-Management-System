@@ -45,6 +45,8 @@ export interface EquipmentDisplay {
   // For assets: list of serial codes
   serialCodes?: { id: string; code: string }[]
   allIds?: string[] // For compatibility with existing code
+  // Track available count for assets (instances with available: true)
+  availableCount?: number
   // Track collection origin for proper deletion/updates
   sourceCollection?: 'equipmentMaster' | 'equipment' // 'equipmentMaster' = new two-collection, 'equipment' = consumables/old assets
   masterInstancePair?: {
@@ -121,7 +123,7 @@ export async function loadAllEquipment(useCache = true): Promise<EquipmentDispla
         id: docSnap.id,
         equipmentId: equipmentId,
         serialCode: data.serialCode,
-        available: data.available || true,
+        available: data.available !== false, // Only default to true if field is undefined/null
         condition: data.condition,
         location: data.location
       })
@@ -131,11 +133,13 @@ export async function loadAllEquipment(useCache = true): Promise<EquipmentDispla
     masterMap.forEach((master, masterId) => {
       const instances = masterInstancesMap.get(masterId) || []
       const instanceIds = instances.map((inst) => inst.id)
+      const availableCount = instances.filter(inst => inst.available).length
       results.push({
         id: masterId,
         name: master.name,
         category: master.category,
         quantity: instances.length,
+        availableCount: availableCount,
         unit: master.unit,
         equipmentTypes: master.equipmentTypes,
         equipmentSubTypes: master.equipmentSubTypes,
@@ -208,6 +212,37 @@ export function invalidateEquipmentCache() {
  */
 export function invalidateEquipmentTypesCache() {
   equipmentTypesCache = null
+}
+
+/**
+ * Sync available count in master to match actual available instances
+ * Call this after changing instance availability status
+ */
+export async function syncMasterAvailableCount(masterId: string): Promise<boolean> {
+  try {
+    // Get all instances for this master
+    const instancesSnap = await getDocs(query(
+      collection(db, 'assetInstances'),
+      where('equipmentId', '==', masterId)
+    ))
+    
+    const instances = instancesSnap.docs.map(doc => doc.data())
+    const availableCount = instances.filter(inst => inst.available).length
+    const totalCount = instances.length
+    
+    // Update master with correct available count
+    await updateDoc(doc(db, 'equipmentMaster', masterId), {
+      available: availableCount,
+      quantity: totalCount
+    })
+    
+    // Invalidate cache so next load gets fresh data
+    invalidateEquipmentCache()
+    return true
+  } catch (error) {
+    console.error('Error syncing available count:', error)
+    return false
+  }
 }
 
 /**

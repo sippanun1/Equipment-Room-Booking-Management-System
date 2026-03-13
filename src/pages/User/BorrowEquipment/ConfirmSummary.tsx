@@ -5,7 +5,7 @@ import { db } from "../../../firebase/firebase"
 import Header from "../../../components/Header"
 import { useAuth } from "../../../hooks/useAuth"
 import { logBorrowTransaction } from "../../../utils/borrowReturnLogger"
-import { getAvailableAssetInstances, markAssetInstancesAsBorrowed, invalidateEquipmentCache } from "../../../utils/equipmentHelper"
+import { getAvailableAssetInstances, markAssetInstancesAsBorrowed, invalidateEquipmentCache, loadAllEquipment } from "../../../utils/equipmentHelper"
 import type { SelectedEquipment } from "../../../App"
 
 interface ConfirmSummaryProps {
@@ -118,20 +118,38 @@ export default function ConfirmSummary({ cartItems }: ConfirmSummaryProps) {
   const handleConfirm = async () => {
     if (!user || isSubmitting) return
 
-    // Validate that assets have required number of codes selected
-    for (const item of cartItems) {
-      if (item.category === "asset") {
-        const codes = assetCodesMap.get(item.id) || []
-        const selectedCount = codes.filter(c => c.selected).length
-        if (selectedCount !== item.selectedQuantity) {
-          alert(`กรุณาเลือกรหัสอุปกรณ์ ${item.selectedQuantity} รายการสำหรับ ${item.name}`)
-          return
-        }
-      }
-    }
-
     setIsSubmitting(true)
     try {
+      // First, validate that enough equipment codes are available
+      const equipmentList = await loadAllEquipment(true) // Force fresh data
+      
+      for (const item of cartItems) {
+        if (item.category === "asset") {
+          const equipment = equipmentList.find(e => e.id === item.id && e.name === item.name)
+          const availableCount = equipment?.availableCount || 0
+          
+          if (availableCount < item.selectedQuantity) {
+            alert(`รหัสอุปกรณ์ "${item.name}" ไม่เพียงพอ\n` +
+              `ต้องการ: ${item.selectedQuantity} รายการ\n` +
+              `พร้อมใช้: ${availableCount} รายการ`)
+            setIsSubmitting(false)
+            return
+          }
+        }
+      }
+
+      // Validate that assets have required number of codes selected
+      for (const item of cartItems) {
+        if (item.category === "asset") {
+          const codes = assetCodesMap.get(item.id) || []
+          const selectedCount = codes.filter(c => c.selected).length
+          if (selectedCount !== item.selectedQuantity) {
+            alert(`กรุณาเลือกรหัสอุปกรณ์ ${item.selectedQuantity} รายการสำหรับ ${item.name}`)
+            setIsSubmitting(false)
+            return
+          }
+        }
+      }
       // Prepare equipment items for logging
       const equipmentItems = cartItems.map(item => {
         const selectedCodes = assetCodesMap.get(item.id)?.filter(c => c.selected).map(c => c.code) || []

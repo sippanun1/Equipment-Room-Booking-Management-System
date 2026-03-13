@@ -28,6 +28,7 @@ interface Equipment {
   picture?: string
   inStock: boolean
   available: number
+  availableCount?: number
   serialCode?: string
   equipmentTypes?: string[]
   equipmentSubTypes?: string[]
@@ -103,22 +104,27 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
             if (item.category === "consumable") {
               return item.quantity > 0
             }
-            // For assets, if it has serialCodes array, check if any are available
-            // For now, we'll assume items from loadAllEquipment are in stock
-            return item.quantity > 0
+            // For assets, check if availableCount > 0
+            const availCount = item.availableCount !== undefined ? item.availableCount : item.quantity
+            return availCount > 0
           })
-          .map(item => ({
-            id: item.id,
-            name: item.name,
-            category: item.category,
-            quantity: item.quantity,
-            unit: item.unit,
-            picture: item.picture,
-            inStock: item.quantity > 0,
-            available: item.quantity,
-            equipmentTypes: item.equipmentTypes,
-            equipmentSubTypes: item.equipmentSubTypes
-          }))
+          .map(item => {
+            // For assets, use availableCount; for consumables, use quantity
+            const displayAvailable = item.category === "asset" && item.availableCount !== undefined ? item.availableCount : item.quantity
+            return {
+              id: item.id,
+              name: item.name,
+              category: item.category,
+              quantity: item.quantity,
+              availableCount: item.availableCount,
+              unit: item.unit,
+              picture: item.picture,
+              inStock: displayAvailable > 0,
+              available: displayAvailable,
+              equipmentTypes: item.equipmentTypes,
+              equipmentSubTypes: item.equipmentSubTypes
+            }
+          })
         
         setEquipmentData(availableEquipment)
         setFilteredEquipment(availableEquipment)

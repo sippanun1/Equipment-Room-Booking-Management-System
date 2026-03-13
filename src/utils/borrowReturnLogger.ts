@@ -1,6 +1,6 @@
 import { doc, setDoc, collection, getDoc, updateDoc, query, where, getDocs, writeBatch } from "firebase/firestore"
 import { db } from "../firebase/firebase"
-import { findAssetInstanceBySerialCode, updateAssetInstanceCondition } from "./equipmentHelper"
+import { findAssetInstanceBySerialCode, updateAssetInstanceCondition, syncMasterAvailableCount } from "./equipmentHelper"
 import type { User } from "firebase/auth"
 
 export interface BorrowItem {
@@ -43,6 +43,11 @@ export interface BorrowTransaction {
   status: "borrowed" | "pending_return" | "returned" | "cancelled"
   notes?: string
   timestamp: number
+  // Condition issue tracking fields
+  conditionIssueStatus?: "pending" | "acknowledged" | "fixed" // pending: awaiting review, acknowledged: reviewed, fixed: repaired
+  conditionAcknowledgedBy?: string
+  conditionAcknowledgedByEmail?: string
+  conditionAcknowledgedAt?: number
   // Admin acknowledgment fields (when admin acknowledges receipt)
   acknowledgedBy?: string
   acknowledgedByEmail?: string
@@ -146,31 +151,41 @@ async function markAssetCodesUnavailable(assetCodes: string[]) {
 }
 
 /**
- * Mark specific asset codes as available (returned and approved)
- * Handles both new assetInstances collection and old equipment collection
+ * Mark asset codes with their returned condition
+ * For "ปกติ": available = true
+ * For "ชำรุด", "สูญหาย": available = false, condition preserved
  */
-async function markAssetCodesAvailable(_equipmentId: string, assetCodes: string[]) {
+async function updateAssetCodesWithReturnCondition(
+  _equipmentId: string,
+  assetCodeConditions: Array<{ code: string; condition: string }>
+) {
   try {
-    for (const code of assetCodes) {
-      // First try to find in new assetInstances collection
+    for (const { code, condition } of assetCodeConditions) {
       const instance = await findAssetInstanceBySerialCode(code)
       
       if (instance) {
-        // Found in new structure - update assetInstances
-        await updateAssetInstanceCondition(instance.id, "ปกติ", true)
+        // Update with returned condition
+        // If condition is ปกติ, mark as available (true)
+        // If condition is ชำรุด or สูญหาย, mark as unavailable (false)
+        const isAvailable = condition === "ปกติ"
+        await updateAssetInstanceCondition(instance.id, condition, isAvailable)
       } else {
-        // Not in new structure, try old equipment collection (for backward compatibility)
+        // Fallback for old equipment collection
         const querySnapshot = await getDocs(
           query(collection(db, "equipment"), where("serialCode", "==", code))
         )
         
         for (const doc of querySnapshot.docs) {
-          await updateDoc(doc.ref, { available: true })
+          const isAvailable = condition === "ปกติ"
+          await updateDoc(doc.ref, { 
+            available: isAvailable,
+            condition: condition
+          })
         }
       }
     }
   } catch (error) {
-    console.error(`Error marking asset codes available:`, error)
+    console.error(`Error updating asset codes with return condition:`, error)
   }
 }
 
@@ -279,6 +294,14 @@ export async function logReturnTransaction(
     }
 
     // Update borrow transaction with return information
+    const hasDamageOrLoss = updatedEquipmentItems.some(item => {
+      const hasAssetConditionIssue = item.assetCodeConditions?.some(ac => ac.condition !== "ปกติ")
+      const hasReturnConditionIssue = item.returnCondition && item.returnCondition !== "ปกติ"
+      const hasDamagedQty = (item.returnDamagedQty || 0) > 0
+      const hasLostQty = (item.returnLostQty || 0) > 0
+      return hasAssetConditionIssue || hasReturnConditionIssue || hasDamagedQty || hasLostQty
+    })
+
     const updateData: Partial<BorrowTransaction> = {
       actualReturnDate: returnDate,
       returnTime,
@@ -286,7 +309,8 @@ export async function logReturnTransaction(
       status: "pending_return",
       returnTimestamp: Date.now(),
       equipmentItems: updatedEquipmentItems,
-      returnedBy: returnedByName || returnedBy?.displayName || "System"
+      returnedBy: returnedByName || returnedBy?.displayName || "System",
+      conditionIssueStatus: hasDamageOrLoss ? "pending" : undefined
     }
     
     // For assets returned in good condition, update the available count
@@ -458,14 +482,11 @@ export async function approveReturnTransaction(
     if (currentData.equipmentItems && currentData.equipmentItems.length > 0) {
       for (const item of currentData.equipmentItems) {
         if (item.equipmentCategory === "asset") {
-          // If we have per-code conditions, mark only normal codes as available
+          // If we have per-code conditions, update each code with its returned condition
           if (item.assetCodeConditions && item.assetCodeConditions.length > 0) {
-            const normalCodes = item.assetCodeConditions
-              .filter(c => c.condition === "ปกติ")
-              .map(c => c.code)
-            if (normalCodes.length > 0) {
-              await markAssetCodesAvailable(item.equipmentId, normalCodes)
-            }
+            await updateAssetCodesWithReturnCondition(item.equipmentId, item.assetCodeConditions)
+            // Sync the master available count after updating instance conditions
+            await syncMasterAvailableCount(item.equipmentId)
           }
         }
         // For consumables or broken/lost items: no action needed

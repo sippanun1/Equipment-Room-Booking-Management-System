@@ -4,6 +4,8 @@ import { collection, getDocs, query, where, updateDoc, doc, getDoc } from "fireb
 import { db } from "../../firebase/firebase"
 import Header from "../../components/Header"
 import { findAssetInstanceBySerialCode, updateAssetInstanceCondition } from "../../utils/equipmentHelper"
+import { logAdminAction } from "../../utils/adminLogger"
+import { useAuth } from "../../hooks/useAuth"
 import type { BorrowTransaction } from "../../utils/borrowReturnLogger"
 
 interface EquipmentConditionData {
@@ -21,10 +23,12 @@ interface EquipmentConditionData {
 
 export default function EquipmentConditionReport() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [equipmentConditions, setEquipmentConditions] = useState<EquipmentConditionData[]>([])
   const [selectedEquipment, setSelectedEquipment] = useState<EquipmentConditionData | null>(null)
   const [filter, setFilter] = useState<'all' | 'ชำรุด' | 'สูญหาย'>('all')
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'all'>('pending')
   const [searchTerm, setSearchTerm] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null)
@@ -35,11 +39,23 @@ export default function EquipmentConditionReport() {
   useEffect(() => {
     const fetchEquipmentConditions = async () => {
       try {
-        // Get all returned borrow transactions
-        const borrowHistoryQuery = query(
-          collection(db, "borrowHistory"),
-          where("status", "==", "returned")
-        )
+        // Get returned borrow transactions, filtering by condition issue status
+        let borrowHistoryQuery
+        if (statusFilter === 'pending') {
+          // Show only items pending admin acknowledgment
+          borrowHistoryQuery = query(
+            collection(db, "borrowHistory"),
+            where("status", "==", "returned"),
+            where("conditionIssueStatus", "==", "pending")
+          )
+        } else {
+          // Show both pending and acknowledged items (not fixed)
+          borrowHistoryQuery = query(
+            collection(db, "borrowHistory"),
+            where("status", "==", "returned"),
+            where("conditionIssueStatus", "in", ["pending", "acknowledged"])
+          )
+        }
         const snapshot = await getDocs(borrowHistoryQuery)
         
         const conditionMap = new Map<string, EquipmentConditionData>()
@@ -50,36 +66,32 @@ export default function EquipmentConditionReport() {
           // Process each equipment item in the transaction
           txn.equipmentItems?.forEach((item, itemIndex) => {
             // Handle both returnCondition (for consumables) and assetCodeConditions (for assets)
-            const hasAssetIssues = item.assetCodeConditions && item.assetCodeConditions.some(ac => ac.condition !== "ปกติ")
-            const hasReturnIssue = item.returnCondition && item.returnCondition !== "ปกติ"
+            // Also check returnDamagedQty (damaged items) and returnLostQty (lost items)
             
-            if (hasAssetIssues || hasReturnIssue) {
-              // For assets with assetCodeConditions, group by first code's condition (or primary condition)
-              const primaryCondition = hasAssetIssues 
-                ? item.assetCodeConditions?.[0]?.condition || item.returnCondition || "ปกติ"
-                : item.returnCondition || "ปกติ"
-              
-              const key = `${item.equipmentName}-${primaryCondition}`
-              
-              if (!conditionMap.has(key)) {
-                conditionMap.set(key, {
-                  equipmentName: item.equipmentName,
-                  equipmentId: item.equipmentId || "",
-                  condition: primaryCondition,
-                  assetCodes: [],
-                  assetCodeConditions: [],
-                  notes: [],
-                  borrowIds: [],
-                  borrowerNames: [],
-                  documentIds: [],
-                  borrowItemIndices: []
-                })
-              }
-              
-              const data = conditionMap.get(key)!
-              // Add asset codes (plural - could be multiple per item)
-              if (item.assetCodeConditions && item.assetCodeConditions.length > 0) {
-                item.assetCodeConditions.forEach(ac => {
+            // For assets with assetCodeConditions: process each condition separately
+            if (item.assetCodeConditions && item.assetCodeConditions.length > 0) {
+              // Group codes by their individual condition, not just the first one
+              item.assetCodeConditions.forEach(ac => {
+                // Only report damaged/lost items, skip normal ones
+                if (ac.condition !== "ปกติ") {
+                  const key = `${item.equipmentName}-${ac.condition}`
+                  
+                  if (!conditionMap.has(key)) {
+                    conditionMap.set(key, {
+                      equipmentName: item.equipmentName,
+                      equipmentId: item.equipmentId || "",
+                      condition: ac.condition,
+                      assetCodes: [],
+                      assetCodeConditions: [],
+                      notes: [],
+                      borrowIds: [],
+                      borrowerNames: [],
+                      documentIds: [],
+                      borrowItemIndices: []
+                    })
+                  }
+                  
+                  const data = conditionMap.get(key)!
                   data.assetCodes.push(ac.code)
                   data.assetCodeConditions.push({
                     code: ac.code,
@@ -87,24 +99,126 @@ export default function EquipmentConditionReport() {
                     notes: ac.notes || ""
                   })
                   data.notes.push(ac.notes || item.returnNotes || "")
-                })
-              } else if (item.assetCodes && item.assetCodes.length > 0) {
-                item.assetCodes.forEach(code => {
+                  data.borrowIds.push(txn.borrowId)
+                  data.borrowerNames.push(txn.userName)
+                  data.documentIds.push(doc.id)
+                  data.borrowItemIndices.push(itemIndex)
+                }
+              })
+            } else {
+              // Fallback for non-asset items or items with returnDamagedQty/returnLostQty
+              const hasDamagedItems = (item.returnDamagedQty || 0) > 0
+              const hasLostItems = (item.returnLostQty || 0) > 0
+              const hasReturnIssue = item.returnCondition && item.returnCondition !== "ปกติ"
+              
+              if (hasDamagedItems) {
+                // Add entries for each damaged item
+                const damagedQty = item.returnDamagedQty || 0
+                const key = `${item.equipmentName}-ชำรุด`
+                
+                if (!conditionMap.has(key)) {
+                  conditionMap.set(key, {
+                    equipmentName: item.equipmentName,
+                    equipmentId: item.equipmentId || "",
+                    condition: "ชำรุด",
+                    assetCodes: [],
+                    assetCodeConditions: [],
+                    notes: [],
+                    borrowIds: [],
+                    borrowerNames: [],
+                    documentIds: [],
+                    borrowItemIndices: []
+                  })
+                }
+                
+                const data = conditionMap.get(key)!
+                for (let i = 0; i < damagedQty; i++) {
+                  const code = `Item-${i + 1}`
                   data.assetCodes.push(code)
                   data.assetCodeConditions.push({
                     code: code,
-                    condition: item.returnCondition || "ปกติ",
+                    condition: "ชำรุด",
                     notes: item.returnNotes || ""
                   })
                   data.notes.push(item.returnNotes || "")
-                })
+                }
+                data.borrowIds.push(txn.borrowId)
+                data.borrowerNames.push(txn.userName)
+                data.documentIds.push(doc.id)
+                data.borrowItemIndices.push(itemIndex)
               }
-              data.borrowIds.push(txn.borrowId)
-              data.borrowerNames.push(txn.userName)
-              data.documentIds.push(doc.id)
-              data.borrowItemIndices.push(itemIndex)
+              
+              if (hasLostItems) {
+                // Add entries for each lost item
+                const lostQty = item.returnLostQty || 0
+                const key = `${item.equipmentName}-สูญหาย`
+                
+                if (!conditionMap.has(key)) {
+                  conditionMap.set(key, {
+                    equipmentName: item.equipmentName,
+                    equipmentId: item.equipmentId || "",
+                    condition: "สูญหาย",
+                    assetCodes: [],
+                    assetCodeConditions: [],
+                    notes: [],
+                    borrowIds: [],
+                    borrowerNames: [],
+                    documentIds: [],
+                    borrowItemIndices: []
+                  })
+                }
+                
+                const data = conditionMap.get(key)!
+                for (let i = 0; i < lostQty; i++) {
+                  const code = `Item-${i + 1}`
+                  data.assetCodes.push(code)
+                  data.assetCodeConditions.push({
+                    code: code,
+                    condition: "สูญหาย",
+                    notes: item.returnNotes || ""
+                  })
+                  data.notes.push(item.returnNotes || "")
+                }
+                data.borrowIds.push(txn.borrowId)
+                data.borrowerNames.push(txn.userName)
+                data.documentIds.push(doc.id)
+                data.borrowItemIndices.push(itemIndex)
+              }
+              
+              if (hasReturnIssue) {
+                // Handle consumables or other items with returnCondition
+                const key = `${item.equipmentName}-${item.returnCondition}`
+                
+                if (!conditionMap.has(key)) {
+                  conditionMap.set(key, {
+                    equipmentName: item.equipmentName,
+                    equipmentId: item.equipmentId || "",
+                    condition: item.returnCondition || "ปกติ",
+                    assetCodes: [],
+                    assetCodeConditions: [],
+                    notes: [],
+                    borrowIds: [],
+                    borrowerNames: [],
+                    documentIds: [],
+                    borrowItemIndices: []
+                  })
+                }
+                
+                const data = conditionMap.get(key)!
+                data.assetCodes.push(`Item-1`)
+                data.assetCodeConditions.push({
+                  code: `Item-1`,
+                  condition: item.returnCondition || "ปกติ",
+                  notes: item.returnNotes || ""
+                })
+                data.notes.push(item.returnNotes || "")
+                data.borrowIds.push(txn.borrowId)
+                data.borrowerNames.push(txn.userName)
+                data.documentIds.push(doc.id)
+                data.borrowItemIndices.push(itemIndex)
+              }
             }
-          })
+        })
         })
         
         setEquipmentConditions(Array.from(conditionMap.values()))
@@ -116,7 +230,7 @@ export default function EquipmentConditionReport() {
     }
     
     fetchEquipmentConditions()
-  }, [])
+  }, [statusFilter])
 
   const getConditionColor = (condition: string) => {
     switch (condition) {
@@ -216,7 +330,21 @@ export default function EquipmentConditionReport() {
         }
         
         updatedItems[itemIndex] = itemToUpdate
-        await updateDoc(docRef, { equipmentItems: updatedItems })
+        
+        // Determine the new condition issue status
+        // If condition is "ปกติ", mark as "fixed"
+        // Otherwise, mark as "acknowledged"
+        const newConditionIssueStatus = newCondition === "ปกติ" ? "fixed" : "acknowledged"
+        
+        const updatePayload: any = { 
+          equipmentItems: updatedItems,
+          conditionIssueStatus: newConditionIssueStatus,
+          conditionAcknowledgedBy: user?.displayName || 'Unknown',
+          conditionAcknowledgedByEmail: user?.email || '',
+          conditionAcknowledgedAt: Date.now()
+        }
+        
+        await updateDoc(docRef, updatePayload)
         
         // If condition changed, update the asset instance in assetInstances collection
         if (serialCode) {
@@ -254,6 +382,20 @@ export default function EquipmentConditionReport() {
             ? { ...eq, assetCodeConditions: updatedAssetCodeConditions, condition: newCondition, notes: updated }
             : eq
         ))
+        
+        // Log the condition acknowledgment to admin history
+        if (user) {
+          const borrowerName = selectedEquipment.borrowerNames[editingItemIndex]
+          const logDetails = `รหัสอาคม: ${serialCode} | สภาพ: ${newCondition} | ผู้ยืม: ${borrowerName} | หมายเหตุ: ${newNotes || 'ไม่มี'}`
+          
+          await logAdminAction({
+            user,
+            action: 'acknowledge',
+            type: 'equipment',
+            itemName: selectedEquipment.equipmentName,
+            details: logDetails
+          })
+        }
         
         setIsEditing(false)
         setEditingItemIndex(null)
@@ -377,6 +519,43 @@ export default function EquipmentConditionReport() {
               สูญหาย
             </button>
           </div>
+
+          {/* Status Filter Buttons */}
+          <div className="w-full flex gap-2 mb-4">
+            <button
+              onClick={() => setStatusFilter('pending')}
+              className={`
+                flex-1
+                py-2
+                rounded-lg
+                text-xs font-semibold
+                transition
+                ${statusFilter === 'pending'
+                  ? 'bg-yellow-600 text-white'
+                  : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+                }
+              `}
+            >
+              รอการตรวจสอบ
+            </button>
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`
+                flex-1
+                py-2
+                rounded-lg
+                text-xs font-semibold
+                transition
+                ${statusFilter === 'all'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                }
+              `}
+            >
+              ทั้งหมด (รอ + ยืนยันแล้ว)
+            </button>
+          </div>
+
           {/* Summary Cards */}
           <div className="w-full grid grid-cols-2 gap-3 mb-6">
             {/* Broken Items */}

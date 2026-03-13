@@ -71,11 +71,17 @@ export default function CartSummary({ cartItems, setCartItems }: CartSummaryProp
 
   const handleAddQuantity = (equipmentId: string) => {
     setItems(prev =>
-      prev.map(item =>
-        item.id === equipmentId
-          ? { ...item, selectedQuantity: item.selectedQuantity + 1 }
-          : item
-      )
+      prev.map(item => {
+        if (item.id === equipmentId) {
+          // Don't exceed available quantity
+          const maxAvailable = item.available || item.quantity || 0
+          if (item.selectedQuantity >= maxAvailable) {
+            return item // Don't add if already at max
+          }
+          return { ...item, selectedQuantity: item.selectedQuantity + 1 }
+        }
+        return item
+      })
     )
   }
 
@@ -190,7 +196,7 @@ export default function CartSummary({ cartItems, setCartItems }: CartSummaryProp
                         </p>
                       )}
                       <p className="text-xs text-gray-500 mt-1">
-                        สต็อค {item.available} {item.unit}
+                        สต็อค: {item.available} {item.unit}
                       </p>
                     </div>
 
@@ -211,20 +217,25 @@ export default function CartSummary({ cartItems, setCartItems }: CartSummaryProp
                         >
                           −
                         </button>
-                        <span className="text-sm font-medium w-6 text-center">
+                        <span className="text-sm font-medium w-8 text-center">
                           {item.selectedQuantity}
                         </span>
                         <button
                           onClick={() => handleAddQuantity(item.id)}
-                          className="
+                          disabled={item.selectedQuantity >= (item.available || item.quantity || 0)}
+                          className={`
                             w-7 h-7
                             rounded
-                            border border-gray-400
-                            text-gray-600
-                            hover:bg-gray-100
+                            border
                             transition
                             flex items-center justify-center
-                          "
+                            font-semibold
+                            ${
+                              item.selectedQuantity >= (item.available || item.quantity || 0)
+                                ? "border-red-300 text-red-400 bg-red-50 cursor-not-allowed"
+                                : "border-gray-400 text-gray-600 hover:bg-gray-100"
+                            }
+                          `}
                         >
                           +
                         </button>
