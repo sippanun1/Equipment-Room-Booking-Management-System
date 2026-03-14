@@ -11,6 +11,7 @@ interface Room {
   code: string
   type: string
   status: "ว่าง" | "ไม่ว่าง"
+  image?: string
   usageDays?: {
     monday: boolean
     tuesday: boolean
@@ -224,7 +225,7 @@ export default function AdminManageRooms() {
         code: room.code,
         type: room.type,
         customType: room.type === "ห้องอื่นๆ" ? room.type : "",
-        image: "",
+        image: (room as any).image || "",
         usageDays: room.usageDays || {
           monday: true,
           tuesday: true,
@@ -247,6 +248,18 @@ export default function AdminManageRooms() {
       setFormData(editFormData)
       setOriginalFormData(JSON.parse(JSON.stringify(editFormData)))
       setShowModal(true)
+    }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const base64String = event.target?.result as string
+        setFormData({ ...formData, image: base64String })
+      }
+      reader.readAsDataURL(file)
     }
   }
 
@@ -325,12 +338,17 @@ export default function AdminManageRooms() {
     try {
       if (editingRoomId) {
         // Edit existing room in Firebase
-        await updateDoc(doc(db, "rooms", editingRoomId), {
+        const updateData: any = {
           code: formData.code,
           type: finalType,
           usageDays: formData.usageDays,
           timeRanges: formData.timeRanges
-        })
+        }
+        if (formData.image) {
+          updateData.image = formData.image
+        }
+        
+        await updateDoc(doc(db, "rooms", editingRoomId), updateData)
         
         setRooms(rooms.map(room =>
           room.id === editingRoomId
@@ -351,13 +369,18 @@ export default function AdminManageRooms() {
         setOriginalFormData(null)
       } else {
         // Add new room to Firebase
-        const docRef = await addDoc(collection(db, "rooms"), {
+        const newRoomData: any = {
           code: formData.code,
           type: finalType,
           status: "ว่าง",
           usageDays: formData.usageDays,
           timeRanges: formData.timeRanges
-        })
+        }
+        if (formData.image) {
+          newRoomData.image = formData.image
+        }
+        
+        const docRef = await addDoc(collection(db, "rooms"), newRoomData)
         
         const newRoom: Room = {
           id: docRef.id,
@@ -686,9 +709,14 @@ export default function AdminManageRooms() {
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                  onChange={handleFileChange}
                   className="w-full text-sm text-gray-600 file:px-4 file:py-2 file:border file:border-gray-300 file:rounded"
                 />
+                {formData.image && (
+                  <div className="mt-3 relative">
+                    <img src={formData.image} alt="Room preview" className="max-w-full h-auto rounded border border-gray-300" />
+                  </div>
+                )}
               </div>
 
               {/* Usage Days */}

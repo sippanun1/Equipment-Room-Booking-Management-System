@@ -50,6 +50,7 @@ export default function RoomBookingHistory() {
   const [returnDetailsModalOpen, setReturnDetailsModalOpen] = useState(false)
   const [selectedReturnBooking, setSelectedReturnBooking] = useState<RoomBookingRecord | null>(null)
   const [showPendingOnly, setShowPendingOnly] = useState(false)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   // Load booking history from Firebase
   useEffect(() => {
@@ -212,10 +213,12 @@ export default function RoomBookingHistory() {
         })
       })
       setBookingHistory(records)
-      alert("อนุมัติการจองและส่งอีเมลยืนยันไปให้ผู้ใช้แล้ว")
+      setSuccessMessage("อนุมัติการจองและส่งอีเมลยืนยันไปให้ผู้ใช้แล้ว")
+      setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
       console.error("Error approving booking:", error)
-      alert("เกิดข้อผิดพลาดในการอนุมัติการจอง")
+      setSuccessMessage("เกิดข้อผิดพลาดในการอนุมัติการจอง")
+      setTimeout(() => setSuccessMessage(null), 3000)
     }
   }
 
@@ -309,10 +312,12 @@ export default function RoomBookingHistory() {
       setCancelModalOpen(false)
       setCancelModalBookingId(null)
       setCancellationReason("")
-      alert("ปฏิเสธการจองและส่งอีเมลแจ้งไปให้ผู้ใช้แล้ว")
+      setSuccessMessage("ปฏิเสธการจองและส่งอีเมลแจ้งไปให้ผู้ใช้แล้ว")
+      setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
       console.error("Error cancelling booking:", error)
-      alert("เกิดข้อผิดพลาดในการปฏิเสธการจอง")
+      setSuccessMessage("เกิดข้อผิดพลาดในการปฏิเสธการจอง")
+      setTimeout(() => setSuccessMessage(null), 3000)
     }
   }
 
@@ -385,6 +390,21 @@ export default function RoomBookingHistory() {
   return (
     <div className="min-h-screen bg-white bg-[radial-gradient(#dbeafe_1px,transparent_1px)] bg-[length:18px_18px]">
       <Header title="ประวัติการจองห้อง" />
+
+      {/* ===== SUCCESS TOAST ===== */}
+      {successMessage && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className={`
+            px-6 py-3 rounded-lg shadow-lg font-medium text-white
+            ${successMessage.includes('เกิดข้อผิดพลาด') 
+              ? 'bg-red-500' 
+              : 'bg-green-500'
+            }
+          `}>
+            {successMessage}
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 flex justify-center">
         <div className="w-full max-w-[400px] px-4 pb-6">
