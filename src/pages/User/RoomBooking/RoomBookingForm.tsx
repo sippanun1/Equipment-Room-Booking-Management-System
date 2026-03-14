@@ -417,7 +417,11 @@ export default function RoomBookingForm({
           <div className="w-full p-4 mb-6 flex gap-4">
             {/* Room Image */}
             <div className="w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center">
-              <span className="text-3xl">{bookingData?.roomImage}</span>
+              {bookingData?.roomImage && bookingData.roomImage.startsWith('data:image') ? (
+                <img src={bookingData.roomImage} alt="Room" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-3xl">{bookingData?.roomImage || '🏢'}</span>
+              )}
             </div>
 
             {/* Room Details */}

@@ -313,8 +313,12 @@ export default function MyRoomBookings({ setReturnBookingData }: MyRoomBookingsP
                   {/* Booking Content */}
                   <div className="p-4 flex gap-4">
                     {/* Image */}
-                    <div className="w-20 h-20 flex-shrink-0 rounded-lg bg-gray-200 flex items-center justify-center text-3xl">
-                      {booking.image}
+                    <div className="w-20 h-20 flex-shrink-0 rounded-lg bg-gray-200 flex items-center justify-center overflow-hidden">
+                      {booking.image && booking.image.startsWith('data:image') ? (
+                        <img src={booking.image} alt={booking.room} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-3xl">{booking.image || '🏢'}</span>
+                      )}
                     </div>
 
                     {/* Info */}

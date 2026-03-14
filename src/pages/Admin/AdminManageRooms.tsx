@@ -123,6 +123,7 @@ export default function AdminManageRooms() {
             code: data.code || "",
             type: data.type || "",
             status: data.status || "ว่าง",
+            image: data.image || "",
             usageDays: data.usageDays || {
               monday: true,
               tuesday: true,

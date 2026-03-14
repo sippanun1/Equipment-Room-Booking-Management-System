@@ -371,7 +371,11 @@ export default function RoomAvailability({ setBookingData }: RoomAvailabilityPro
                       {/* Room Image & Name - Fixed */}
                       <div className="w-24 flex-shrink-0">
                         <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center mb-2">
-                          <span className="text-2xl">{room.image}</span>
+                          {room.image && room.image.startsWith('data:image') ? (
+                            <img src={room.image} alt={room.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-2xl">{room.image || '🏢'}</span>
+                          )}
                           <div
                             className={`absolute top-1 left-1 ${room.badgeColor} text-white text-xs font-bold px-1 py-0.5 rounded`}
                           >

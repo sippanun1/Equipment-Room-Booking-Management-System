@@ -43,8 +43,12 @@ export default function ListPopularRoom({ rooms, onBookNow }: ListPopularRoomPro
             className="rounded-lg overflow-hidden hover:shadow-lg transition bg-white"
           >
             {/* Room Image */}
-            <div className="relative h-32 bg-gray-300 flex items-center justify-center">
-              <span className="text-4xl">{room.image}</span>
+            <div className="relative h-32 bg-gray-300 flex items-center justify-center overflow-hidden">
+              {room.image && room.image.startsWith('data:image') ? (
+                <img src={room.image} alt={room.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-4xl">{room.image || '🏢'}</span>
+              )}
               {/* Badge */}
               <div className={`absolute top-2 left-2 ${room.badgeColor} text-white text-xs font-bold px-2 py-1 rounded`}>
                 {room.badge}
