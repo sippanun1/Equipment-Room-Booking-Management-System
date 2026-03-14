@@ -62,10 +62,10 @@ export default function RoomBooking({ setBookingData }: RoomBookingProps) {
         })
 
         // Map rooms with booking count and metadata
-        const roomsWithMeta = roomsList.map((room) => ({
+        const roomsWithMeta = roomsList.map((room: any) => ({
           ...room,
           name: room.code,
-          image: "🏢",
+          image: (room as any).image || "🏢",
           badge: bookingCounts[room.id] > 10 ? "HOT" : "AVAILABLE",
           badgeColor: bookingCounts[room.id] > 10 ? "bg-orange-500" : "bg-green-500",
           availability: "Available",

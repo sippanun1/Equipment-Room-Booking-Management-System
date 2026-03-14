@@ -68,6 +68,14 @@ export default function MyRoomBookings({ setReturnBookingData }: MyRoomBookingsP
       const querySnapshot = await getDocs(q)
       
       const fetchedBookings: RoomBooking[] = []
+      // Get all rooms to map room codes to images
+      const roomsSnapshot = await getDocs(collection(db, "rooms"))
+      const roomImageMap: { [key: string]: string } = {}
+      roomsSnapshot.forEach((doc) => {
+        const roomData = doc.data()
+        roomImageMap[roomData.code] = roomData.image || "🏢"
+      })
+
       for (const doc of querySnapshot.docs) {
         const data = doc.data()
         fetchedBookings.push({
@@ -78,7 +86,7 @@ export default function MyRoomBookings({ setReturnBookingData }: MyRoomBookingsP
           date: data.date,
           name: data.userName || "ผู้ใช้",
           bookedAt: formatThaiDate(data.bookedAt),
-          image: "🏢",
+          image: roomImageMap[data.roomCode] || "🏢",
           status: data.status || "upcoming",
           startTime: data.startTime,
           endTime: data.endTime,

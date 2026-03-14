@@ -713,8 +713,15 @@ export default function AdminManageRooms() {
                   className="w-full text-sm text-gray-600 file:px-4 file:py-2 file:border file:border-gray-300 file:rounded"
                 />
                 {formData.image && (
-                  <div className="mt-3 relative">
+                  <div className="mt-3">
                     <img src={formData.image} alt="Room preview" className="max-w-full h-auto rounded border border-gray-300" />
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, image: "" })}
+                      className="mt-2 w-full py-2 bg-red-500 text-white text-xs font-semibold rounded hover:bg-red-600 transition"
+                    >
+                      ลบรูปภาพ
+                    </button>
                   </div>
                 )}
               </div>
