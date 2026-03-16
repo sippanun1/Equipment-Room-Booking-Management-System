@@ -165,10 +165,13 @@ export default function AdminManageUsers() {
   }
 
   const toggleSelectAll = () => {
-    if (selectedUserIds.size === filteredUsers.length && filteredUsers.length > 0) {
+    // Get all selectable users (excluding current user)
+    const selectableUsers = filteredUsers.filter(u => u.id !== authUser?.uid)
+    
+    if (selectedUserIds.size === selectableUsers.length && selectableUsers.length > 0) {
       setSelectedUserIds(new Set())
     } else {
-      const allIds = new Set(filteredUsers.map(u => u.id))
+      const allIds = new Set(selectableUsers.map(u => u.id))
       setSelectedUserIds(allIds)
     }
   }
@@ -284,12 +287,12 @@ export default function AdminManageUsers() {
                 <button
                   onClick={toggleSelectAll}
                   className={`px-3 py-1 rounded text-xs font-medium transition ${
-                    selectedUserIds.size === filteredUsers.length && filteredUsers.length > 0
+                    selectedUserIds.size === (filteredUsers.filter(u => u.id !== authUser?.uid).length) && filteredUsers.filter(u => u.id !== authUser?.uid).length > 0
                       ? 'bg-blue-500 text-white'
                       : 'border border-gray-300 text-gray-700 hover:border-blue-500'
                   }`}
                 >
-                  {selectedUserIds.size === filteredUsers.length && filteredUsers.length > 0 ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด'}
+                  {selectedUserIds.size === (filteredUsers.filter(u => u.id !== authUser?.uid).length) && filteredUsers.filter(u => u.id !== authUser?.uid).length > 0 ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด'}
                 </button>
                 {selectedUserIds.size > 0 && (
                   <button

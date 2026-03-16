@@ -487,32 +487,28 @@ export default function BorrowReturnHistory() {
             </div>
           ) : filteredTransactions.length > 0 ? (
             <>
-              {/* Bulk Delete Toolbar */}
-              {selectedIds.size > 0 && (
-                <div className="w-full mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
-                  <span className="text-sm font-medium text-blue-800">
-                    เลือกแล้ว {selectedIds.size} รายการ
-                  </span>
+              <div className="mb-4 flex gap-2 items-center">
+                <button
+                  onClick={toggleSelectAll}
+                  className={`px-3 py-1 rounded text-xs font-medium transition ${
+                    selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0
+                      ? 'bg-blue-500 text-white'
+                      : 'border border-gray-300 text-gray-700 hover:border-blue-500'
+                  }`}
+                >
+                  {selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0 ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด'}
+                </button>
+                {selectedIds.size > 0 && (
                   <button
                     onClick={() => setShowBulkDeleteConfirm(true)}
-                    className="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition"
+                    className="px-3 py-1 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition"
                   >
-                    🗑️ ลบ
+                    ลบ ({selectedIds.size})
                   </button>
-                </div>
-              )}
+                )}
+              </div>
               
               <div className="w-full space-y-3">
-                {/* Select All Checkbox */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0}
-                    onChange={toggleSelectAll}
-                    className="w-4 h-4 cursor-pointer"
-                  />
-                  <span className="text-sm font-medium text-gray-700">เลือกทั้งหมด</span>
-                </div>
                 
                 {filteredTransactions.map((txn) => (
                   <div

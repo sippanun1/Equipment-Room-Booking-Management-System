@@ -541,30 +541,6 @@ export default function RoomBookingHistory() {
             <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">🔍</span>
           </div>
 
-          {/* Select All and Bulk Delete */}
-          {filteredHistory.length > 0 && (
-            <div className="mb-4 flex gap-2 items-center justify-end">
-              <button
-                onClick={toggleSelectAll}
-                className={`px-3 py-1 rounded text-xs font-medium transition ${
-                  selectedBookingIds.size === filteredHistory.length && filteredHistory.length > 0
-                    ? 'bg-blue-500 text-white'
-                    : 'border border-gray-300 text-gray-700 hover:border-blue-500'
-                }`}
-              >
-                {selectedBookingIds.size === filteredHistory.length && filteredHistory.length > 0 ? 'ยกเลิกเลือก' : 'เลือกทั้งหมด'}
-              </button>
-              {selectedBookingIds.size > 0 && (
-                <button
-                  onClick={() => setShowBulkDeleteConfirm(true)}
-                  className="px-3 py-1 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition"
-                >
-                  ลบ ({selectedBookingIds.size})
-                </button>
-              )}
-            </div>
-          )}
-
           {/* Collapsible Filter Section */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg mb-6 overflow-hidden">
             {/* Filter Header - Always Visible */}
@@ -727,6 +703,30 @@ export default function RoomBookingHistory() {
               </div>
             )}
           </div>
+
+          {/* Select All and Bulk Delete */}
+          {filteredHistory.length > 0 && (
+            <div className="mb-4 flex gap-2 items-center">
+              <button
+                onClick={toggleSelectAll}
+                className={`px-3 py-1 rounded text-xs font-medium transition ${
+                  selectedBookingIds.size === filteredHistory.length && filteredHistory.length > 0
+                    ? 'bg-blue-500 text-white'
+                    : 'border border-gray-300 text-gray-700 hover:border-blue-500'
+                }`}
+              >
+                {selectedBookingIds.size === filteredHistory.length && filteredHistory.length > 0 ? 'ยกเลิกทั้งหมด' : 'เลือกทั้งหมด'}
+              </button>
+              {selectedBookingIds.size > 0 && (
+                <button
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  className="px-3 py-1 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition"
+                >
+                  ลบ ({selectedBookingIds.size})
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Booking History List */}
           <div className="flex flex-col gap-3">
