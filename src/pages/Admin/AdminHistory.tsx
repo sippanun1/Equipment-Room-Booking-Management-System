@@ -30,6 +30,8 @@ export default function AdminHistory() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null)
   const [deleteMessage, setDeleteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
 
   // Check if any filter is active
   const hasActiveFilters = selectedType !== 'all' || selectedAction !== 'all' || dateFilter !== 'all' || searchTerm !== ''
@@ -167,6 +169,47 @@ export default function AdminHistory() {
       setTimeout(() => setDeleteMessage(null), 3000)
     } catch (error) {
       console.error('Error deleting action:', error)
+      setDeleteMessage({ type: 'error', text: 'เกิดข้อผิดพลาดในการลบประวัติ' })
+    }
+  }
+
+  const toggleSelectId = (id: string) => {
+    const newSelected = new Set(selectedIds)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedIds(newSelected)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredActions.length) {
+      setSelectedIds(new Set())
+    } else {
+      const allIds = new Set(filteredActions.map(action => action.id))
+      setSelectedIds(allIds)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    try {
+      // Delete all selected items
+      for (const id of selectedIds) {
+        await deleteDoc(doc(db, 'adminLogs', id))
+      }
+      
+      setDeleteMessage({ type: 'success', text: `ลบประวัติ ${selectedIds.size} รายการสำเร็จ` })
+      
+      // Remove from state
+      setActions(actions.filter(action => !selectedIds.has(action.id)))
+      setSelectedIds(new Set())
+      setShowBulkDeleteConfirm(false)
+      
+      // Clear message after 3 seconds
+      setTimeout(() => setDeleteMessage(null), 3000)
+    } catch (error) {
+      console.error('Error bulk deleting actions:', error)
       setDeleteMessage({ type: 'error', text: 'เกิดข้อผิดพลาดในการลบประวัติ' })
     }
   }
@@ -376,81 +419,116 @@ export default function AdminHistory() {
               <p className="text-gray-500">กำลังโหลดข้อมูล...</p>
             </div>
           ) : (
-            <div className="overflow-x-auto bg-white rounded-lg shadow-sm border border-gray-200">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                      เวลา
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                      แอดมิน
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                      ประเภท
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                      การดำเนิน
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                      ชื่อรายการ
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
-                      รายละเอียด
-                    </th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700">
-                      จัดการ
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredActions.length > 0 ? (
-                    filteredActions.map((action) => (
-                      <tr key={action.id} className="border-b border-gray-200 hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {new Date(action.timestamp).toLocaleString('th-TH')}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          <div className="font-medium">{action.adminName}</div>
-                          <div className="text-xs text-gray-500">{action.adminEmail}</div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {getTypeLabel(action.type)}
-                        </td>
-                        <td className="px-6 py-4 text-sm">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getActionColor(action.action)}`}>
-                            {getActionLabel(action.action)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {action.itemName}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
-                          {action.details}
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <button
-                            onClick={() => {
-                              setSelectedActionId(action.id)
-                              setShowDeleteConfirm(true)
-                            }}
-                            className="px-3 py-1 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition"
-                          >
-                            ลบ
-                          </button>
+            <>
+              {/* Bulk Delete Toolbar */}
+              {selectedIds.size > 0 && (
+                <div className="mb-6 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-blue-900">
+                      เลือกแล้ว {selectedIds.size} รายการ
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowBulkDeleteConfirm(true)}
+                    className="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition"
+                  >
+                    ลบที่เลือก
+                  </button>
+                </div>
+              )}
+
+              <div className="overflow-x-auto bg-white rounded-lg shadow-sm border border-gray-200">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="px-4 py-4 text-left text-sm font-semibold text-gray-700 w-8">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.size > 0 && selectedIds.size === filteredActions.length}
+                          onChange={toggleSelectAll}
+                          className="w-4 h-4 cursor-pointer"
+                        />
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                        เวลา
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                        แอดมิน
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                        ประเภท
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                        การดำเนิน
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                        ชื่อรายการ
+                      </th>
+                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-700">
+                        รายละเอียด
+                      </th>
+                      <th className="px-6 py-4 text-center text-sm font-semibold text-gray-700">
+                        จัดการ
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredActions.length > 0 ? (
+                      filteredActions.map((action) => (
+                        <tr key={action.id} className={`border-b border-gray-200 hover:bg-gray-50 ${selectedIds.has(action.id) ? 'bg-blue-50' : ''}`}>
+                          <td className="px-4 py-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(action.id)}
+                              onChange={() => toggleSelectId(action.id)}
+                              className="w-4 h-4 cursor-pointer"
+                            />
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            {new Date(action.timestamp).toLocaleString('th-TH')}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            <div className="font-medium">{action.adminName}</div>
+                            <div className="text-xs text-gray-500">{action.adminEmail}</div>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            {getTypeLabel(action.type)}
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getActionColor(action.action)}`}>
+                              {getActionLabel(action.action)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            {action.itemName}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            {action.details}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button
+                              onClick={() => {
+                                setSelectedActionId(action.id)
+                                setShowDeleteConfirm(true)
+                              }}
+                              className="px-3 py-1 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition"
+                            >
+                              ลบ
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-8 text-center text-gray-500">
+                          ไม่มีข้อมูลการจัดการของแอดมิน
                         </td>
                       </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
-                        ไม่มีข้อมูลการจัดการของแอดมิน
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -475,6 +553,32 @@ export default function AdminHistory() {
               </button>
               <button
                 onClick={() => handleDeleteAction(selectedActionId)}
+                className="flex-1 px-4 py-2 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition"
+              >
+                ยืนยันลบ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">ยืนยันการลบ</h3>
+            <p className="text-gray-700 mb-6">
+              คุณแน่ใจว่าต้องการลบประวัติ <span className="font-bold text-red-600">{selectedIds.size}</span> รายการ?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowBulkDeleteConfirm(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-100 transition"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={() => handleBulkDelete()}
                 className="flex-1 px-4 py-2 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition"
               >
                 ยืนยันลบ
