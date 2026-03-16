@@ -309,8 +309,12 @@ export async function logReturnTransaction(
       status: "pending_return",
       returnTimestamp: Date.now(),
       equipmentItems: updatedEquipmentItems,
-      returnedBy: returnedByName || returnedBy?.displayName || "System",
-      conditionIssueStatus: hasDamageOrLoss ? "pending" : undefined
+      returnedBy: returnedByName || returnedBy?.displayName || "System"
+    }
+
+    // Only add conditionIssueStatus if there's damage or loss
+    if (hasDamageOrLoss) {
+      updateData.conditionIssueStatus = "pending"
     }
     
     // For assets returned in good condition, update the available count
