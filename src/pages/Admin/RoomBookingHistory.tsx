@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { collection, getDocs, query, orderBy, updateDoc, doc, limit } from "firebase/firestore"
+import { collection, getDocs, query, orderBy, updateDoc, doc, limit, deleteDoc } from "firebase/firestore"
 import { db } from "../../firebase/firebase"
 import Header from "../../components/Header"
 import { sendRoomBookingConfirmationToUser, sendRoomBookingRejectionToUser } from "../../utils/emailService"
+import { useAuth } from "../../hooks/useAuth"
+import { logAdminAction } from "../../utils/adminLogger"
 
 interface RoomBookingRecord {
   id: string
@@ -34,6 +36,7 @@ interface RoomBookingRecord {
 
 export default function RoomBookingHistory() {
   const navigate = useNavigate()
+  const { user: authUser } = useAuth()
   const [searchTerm, setSearchTerm] = useState("")
   const [filterStatus, setFilterStatus] = useState<"all" | "completed" | "cancelled" | "denied" | "pending" | "approved">("all")
   const [roomTypeFilter, setRoomTypeFilter] = useState<"all" | "ห้องเรียน" | "ห้องปฏิบัติการ" | "ห้องประชุม">("all")
@@ -51,6 +54,8 @@ export default function RoomBookingHistory() {
   const [selectedReturnBooking, setSelectedReturnBooking] = useState<RoomBookingRecord | null>(null)
   const [showPendingOnly, setShowPendingOnly] = useState(false)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(new Set())
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
 
   // Load booking history from Firebase
   useEffect(() => {
@@ -321,6 +326,104 @@ export default function RoomBookingHistory() {
     }
   }
 
+  const toggleSelectBooking = (bookingId: string) => {
+    const newSelected = new Set(selectedBookingIds)
+    if (newSelected.has(bookingId)) {
+      newSelected.delete(bookingId)
+    } else {
+      newSelected.add(bookingId)
+    }
+    setSelectedBookingIds(newSelected)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedBookingIds.size === filteredHistory.length && filteredHistory.length > 0) {
+      setSelectedBookingIds(new Set())
+    } else {
+      const allIds = new Set(filteredHistory.map(b => b.id))
+      setSelectedBookingIds(allIds)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedBookingIds.size === 0) return
+
+    try {
+      let deletedCount = 0
+      for (const bookingId of selectedBookingIds) {
+        const booking = bookingHistory.find(b => b.id === bookingId)
+        if (booking) {
+          try {
+            await deleteDoc(doc(db, "roomBookings", bookingId))
+            
+            // Log the deletion
+            if (authUser) {
+              await logAdminAction({
+                user: authUser,
+                action: 'delete',
+                type: 'room',
+                itemName: `การจองห้อง: ${booking.roomCode}`,
+                details: `ลบประวัติการจองห้อง: ${booking.roomCode} | ผู้จอง: ${booking.userName} | วันที่: ${booking.date} | สถานะ: ${booking.status}`
+              })
+            }
+            deletedCount++
+          } catch (error) {
+            console.error(`Error deleting booking ${bookingId}:`, error)
+          }
+        }
+      }
+
+      setSuccessMessage(`ลบประวัติการจองห้อง ${deletedCount} รายการสำเร็จ`)
+      setTimeout(() => setSuccessMessage(null), 3000)
+
+      // Reload bookings list
+      const q = query(collection(db, "roomBookings"), orderBy("date", "desc"), limit(PAGE_SIZE + 1))
+      const querySnapshot = await getDocs(q)
+      const records: RoomBookingRecord[] = []
+      let index = 0
+      
+      querySnapshot.forEach((doc) => {
+        if (index < PAGE_SIZE) {
+          const data = doc.data()
+          records.push({
+            id: doc.id,
+            roomCode: data.roomCode || "",
+            roomName: data.roomCode || "",
+            roomType: data.roomType || "",
+            userName: data.userName || "",
+            userId: data.userId || "",
+            userEmail: data.userEmail || "",
+            date: data.date || "",
+            startTime: data.startTime || "",
+            endTime: data.endTime || "",
+            purpose: data.purpose || "",
+            status: data.status || "upcoming",
+            bookedAt: data.bookedAt || "",
+            people: data.people || 0,
+            members: data.members || [],
+            cancellationReason: data.cancellationReason || "",
+            cancelledBy: data.cancelledBy || "",
+            cancelledByType: data.cancelledByType || "user",
+            cancelledAt: data.cancelledAt || "",
+            roomCondition: data.roomCondition || "",
+            equipmentCondition: data.equipmentCondition || "",
+            returnNotes: data.returnNotes || "",
+            returnedAt: data.returnedAt || "",
+            pictures: data.pictures || []
+          })
+        }
+        index++
+      })
+      setBookingHistory(records)
+      setSelectedBookingIds(new Set())
+      setShowBulkDeleteConfirm(false)
+    } catch (error) {
+      console.error("Error bulk deleting bookings:", error)
+      setSuccessMessage("เกิดข้อผิดพลาดในการลบประวัติการจอง")
+      setTimeout(() => setSuccessMessage(null), 3000)
+    }
+  }
+
   // Date filter logic
   const isWithinDateRange = (bookingDate: string) => {
     if (dateFilter === 'all') return true
@@ -437,6 +540,30 @@ export default function RoomBookingHistory() {
             />
             <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400">🔍</span>
           </div>
+
+          {/* Select All and Bulk Delete */}
+          {filteredHistory.length > 0 && (
+            <div className="mb-4 flex gap-2 items-center justify-end">
+              <button
+                onClick={toggleSelectAll}
+                className={`px-3 py-1 rounded text-xs font-medium transition ${
+                  selectedBookingIds.size === filteredHistory.length && filteredHistory.length > 0
+                    ? 'bg-blue-500 text-white'
+                    : 'border border-gray-300 text-gray-700 hover:border-blue-500'
+                }`}
+              >
+                {selectedBookingIds.size === filteredHistory.length && filteredHistory.length > 0 ? 'ยกเลิกเลือก' : 'เลือกทั้งหมด'}
+              </button>
+              {selectedBookingIds.size > 0 && (
+                <button
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  className="px-3 py-1 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 transition"
+                >
+                  ลบ ({selectedBookingIds.size})
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Collapsible Filter Section */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg mb-6 overflow-hidden">
@@ -611,9 +738,19 @@ export default function RoomBookingHistory() {
               filteredHistory.map((record) => {
                 const statusBadge = getStatusBadge(record.status, record.cancelledByType)
                 return (
-                  <div key={record.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+                  <div key={record.id} className={`bg-white border rounded-xl p-4 shadow-sm transition ${
+                    selectedBookingIds.has(record.id)
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}>
                     {/* Header */}
-                    <div className="flex justify-between items-start mb-3">
+                    <div className="flex justify-between items-start mb-3 gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedBookingIds.has(record.id)}
+                        onChange={() => toggleSelectBooking(record.id)}
+                        className="mt-1 w-4 h-4 cursor-pointer accent-blue-500"
+                      />
                       <div>
                         <h3 className="font-bold text-gray-800">{record.roomCode}</h3>
                         <p className="text-xs text-gray-500">{record.roomType}</p>
@@ -866,6 +1003,40 @@ export default function RoomBookingHistory() {
             >
               ปิด
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">ยืนยันการลบหลายรายการ</h3>
+            <p className="text-gray-700 mb-2">
+              คุณแน่ใจว่าต้องการลบประวัติการจองห้อง <span className="font-semibold">{selectedBookingIds.size}</span> รายการนี้?
+            </p>
+            <p className="text-sm text-gray-600 mb-6 bg-gray-50 p-3 rounded-lg max-h-32 overflow-y-auto">
+              {Array.from(selectedBookingIds)
+                .map(id => bookingHistory.find(b => b.id === id)?.roomCode || '')
+                .filter(Boolean)
+                .join(', ')}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowBulkDeleteConfirm(false)
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-100 transition"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                className="flex-1 px-4 py-2 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition"
+              >
+                ยืนยันลบ
+              </button>
+            </div>
           </div>
         </div>
       )}
