@@ -487,7 +487,7 @@ export default function BorrowReturnHistory() {
             </div>
           ) : filteredTransactions.length > 0 ? (
             <>
-              <div className="mb-4 flex gap-2 items-center">
+              <div className="mb-4 flex gap-2 items-center justify-end">
                 <button
                   onClick={toggleSelectAll}
                   className={`px-3 py-1 rounded text-xs font-medium transition ${
