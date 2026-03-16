@@ -706,7 +706,7 @@ export default function RoomBookingHistory() {
 
           {/* Select All and Bulk Delete */}
           {filteredHistory.length > 0 && (
-            <div className="mb-4 flex gap-2 items-center justify-end">
+            <div className="w-full mb-4 flex gap-2 items-center justify-end">
               <button
                 onClick={toggleSelectAll}
                 className={`px-3 py-1 rounded text-xs font-medium transition ${
