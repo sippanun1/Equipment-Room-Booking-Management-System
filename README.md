@@ -1,73 +1,156 @@
-# React + TypeScript + Vite
+# ระบบจัดการอุปกรณ์และการจองห้อง
+# Equipment & Room Booking Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A comprehensive web application for managing equipment borrowing, returns, and room bookings with admin and user interfaces.
 
-Currently, two official plugins are available:
+## 📋 Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### Admin Features
+- **Equipment Management**
+  - Add, edit, and delete equipment (consumables and assets)
+  - Track equipment availability and stock levels
+  - Manage serial codes for assets
+  - Upload equipment images
+  - Equipment condition reporting and damage tracking
 
-## React Compiler
+- **Room Management**
+  - Create and manage classroom/meeting rooms
+  - Set room hours and availability by day
+  - Upload and display room images
+  - View room booking schedules
+  - Cancel bookings and manage usage
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Borrow/Return Management**
+  - Approve/reject equipment requests
+  - Track equipment returns and conditions
+  - Log equipment damage/loss with status tracking
+  - Send confirmation emails with serial codes
+  - View complete borrow/return history
 
-## Expanding the ESLint configuration
+- **User Management**
+  - View and manage system users
+  - Delete user accounts and associated data
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Reporting**
+  - Admin action logs
+  - Equipment condition reports
+  - Borrow/return history
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### User Features
+- **Equipment Borrowing**
+  - Browse available equipment
+  - Submit borrow requests
+  - View borrow history with serial codes
+  - Return equipment and report conditions
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- **Room Booking**
+  - View room availability by date and time
+  - Book available rooms with images
+  - Manage personal bookings
+  - Cancel bookings
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## 🛠️ Tech Stack
+
+- **Frontend**: React 18 with TypeScript
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS
+- **Database**: Firebase Firestore
+- **Authentication**: Firebase Authentication
+- **Email**: Firebase Cloud Functions (Nodemailer)
+
+## 📦 Project Structure
+
+```
+src/
+├── components/         # Reusable React components
+│   ├── Header.tsx
+│   ├── BookRoomButton.tsx
+│   ├── ListPopularRoom.tsx
+│   └── ...
+├── pages/             # Page components
+│   ├── Admin/         # Admin dashboard pages
+│   │   ├── AdminManageEquipment.tsx
+│   │   ├── AdminManageRooms.tsx
+│   │   ├── AdminManageUsers.tsx
+│   │   └── ...
+│   ├── User/          # User pages
+│   │   ├── BorrowEquipment/
+│   │   ├── ReturnEquipment/
+│   │   ├── RoomBooking/
+│   │   └── ...
+│   ├── Login.tsx
+│   ├── Register.tsx
+│   └── Home.tsx
+├── hooks/             # Custom React hooks
+│   └── useAuth.ts
+├── utils/             # Utility functions
+│   ├── equipmentHelper.ts
+│   ├── borrowReturnLogger.ts
+│   ├── emailService.ts
+│   └── adminLogger.ts
+├── types/             # TypeScript type definitions
+│   └── auth.ts
+├── firebase/          # Firebase configuration
+│   └── firebase.ts
+├── data/              # Static data
+│   └── equipment.ts
+└── App.tsx            # Main app component
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🚀 Getting Started
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Prerequisites
+- Node.js (v16 or higher)
+- npm or yarn
+- Firebase project
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### Installation
+
+```bash
+# Clone repository
+git clone <repository-url>
+cd forpte
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
 ```
+
+## 🔄 Equipment Condition Lifecycle
+
+- **ปกติ** (Normal): Equipment in good condition
+- **ชำรุด** (Damaged): Equipment needs repair
+- **สูญหาย** (Lost): Equipment lost
+
+**Condition Issue Status**:
+- **pending**: Awaiting admin review
+- **acknowledged**: Admin confirmed
+- **fixed**: Equipment repaired
+
+## 📧 Email Notifications
+
+Automatic emails for:
+- Equipment borrow confirmations
+- Room booking confirmations
+- Return notifications
+- Condition reports
+
+## 🔐 Security
+
+- Protected admin routes
+- User authentication required
+- Firestore security rules
+- Email verification
+
+## 📄 License
+
+Internal Use Only - All Rights Reserved
+
+## 📞 Support
+
+For issues contact the development team.
