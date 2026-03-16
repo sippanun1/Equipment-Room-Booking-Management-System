@@ -83,6 +83,7 @@ export default function AdminManageEquipment() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<"all" | "consumable" | "asset" | "main">("all")
   const [selectedStockStatus, setSelectedStockStatus] = useState<"all" | "outOfStock" | "lowStock">("all")
+  const [selectedEquipmentType, setSelectedEquipmentType] = useState<string>("all")
   const [showStockStatusFilter, setShowStockStatusFilter] = useState(false)
   const [showAddStockModal, setShowAddStockModal] = useState(false)
   const [showAddEquipmentModal, setShowAddEquipmentModal] = useState(false)
@@ -240,9 +241,26 @@ export default function AdminManageEquipment() {
 
   const groupedEquipment = getGroupedEquipment()
 
+  // Get unique equipment types from all equipment
+  const getUniqueEquipmentTypes = () => {
+    const types = new Set<string>()
+    groupedEquipment.forEach((item: any) => {
+      if (item.equipmentTypes && Array.isArray(item.equipmentTypes)) {
+        item.equipmentTypes.forEach((type: string) => types.add(type))
+      }
+    })
+    return Array.from(types).sort()
+  }
+
+  const uniqueEquipmentTypes = getUniqueEquipmentTypes()
+
   const filteredEquipment = groupedEquipment.filter((item: any) => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = selectedCategory === "all" || item.category === selectedCategory
+    
+    // Filter by equipment type
+    const matchesEquipmentType = selectedEquipmentType === "all" || 
+      (item.equipmentTypes && Array.isArray(item.equipmentTypes) && item.equipmentTypes.includes(selectedEquipmentType))
     
     // Filter by stock status (only for consumables)
     let matchesStockStatus = true
@@ -254,7 +272,7 @@ export default function AdminManageEquipment() {
       }
     }
     
-    return matchesSearch && matchesCategory && matchesStockStatus
+    return matchesSearch && matchesCategory && matchesStockStatus && matchesEquipmentType
   })
 
   const handleAddEquipment = () => {
@@ -1158,12 +1176,51 @@ export default function AdminManageEquipment() {
                   </div>
                 </div>
 
+                {/* Equipment Type Filter */}
+                {uniqueEquipmentTypes.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold text-gray-600 mb-2">ประเภทอุปกรณ์:</p>
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        onClick={() => setSelectedEquipmentType("all")}
+                        className={`
+                          px-3 py-1.5 rounded-full text-xs font-medium transition
+                          ${
+                            selectedEquipmentType === "all"
+                              ? "bg-blue-500 text-white"
+                              : "border border-gray-300 text-gray-700 hover:border-blue-500"
+                          }
+                        `}
+                      >
+                        ทั้งหมด
+                      </button>
+                      {uniqueEquipmentTypes.map((type) => (
+                        <button
+                          key={type}
+                          onClick={() => setSelectedEquipmentType(type)}
+                          className={`
+                            px-3 py-1.5 rounded-full text-xs font-medium transition
+                            ${
+                              selectedEquipmentType === type
+                                ? "bg-blue-500 text-white"
+                                : "border border-gray-300 text-gray-700 hover:border-blue-500"
+                            }
+                          `}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Clear Filters Button */}
                 <div className="pt-3 border-t border-gray-200">
                   <button
                     onClick={() => {
                       setSelectedCategory("all")
                       setSelectedStockStatus("all")
+                      setSelectedEquipmentType("all")
                     }}
                     className="text-xs text-gray-500 hover:text-red-500 transition flex items-center gap-1"
                   >
