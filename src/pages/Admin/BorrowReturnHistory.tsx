@@ -215,12 +215,36 @@ export default function BorrowReturnHistory() {
   const handleBulkDelete = async () => {
     try {
       let successCount = 0
+      const deletedItems: BorrowTransaction[] = []
+      
       for (const id of selectedIds) {
         try {
+          // Find the transaction to log details
+          const txn = transactions.find(t => t.borrowId === id)
+          
           await deleteDoc(doc(db, "borrowHistory", id))
           successCount++
+          
+          if (txn) {
+            deletedItems.push(txn)
+          }
         } catch (error) {
           console.error(`Error deleting transaction ${id}:`, error)
+        }
+      }
+      
+      // Log admin action for each deleted transaction
+      if (user && deletedItems.length > 0) {
+        for (const txn of deletedItems) {
+          const equipmentNames = txn.equipmentItems.map(item => `${item.equipmentName} (${item.quantityBorrowed})`).join(", ")
+          
+          await logAdminAction({
+            user,
+            action: 'delete',
+            type: 'equipment',
+            itemName: `${txn.userName} - ${equipmentNames}`,
+            details: `ลบประวัติการยืมอุปกรณ์: ${equipmentNames} | ผู้ยืม: ${txn.userName} | สถานะ: ${txn.status}`
+          })
         }
       }
       
@@ -972,7 +996,7 @@ export default function BorrowReturnHistory() {
 
       {/* Bulk Delete Confirmation Modal */}
       {showBulkDeleteConfirm && (
-        <div className="fixed inset-0 backdrop-blur-xs bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full">
             <h3 className="text-lg font-bold text-gray-900 mb-2">ยืนยันการลบ</h3>
             <p className="text-gray-700 mb-4">
