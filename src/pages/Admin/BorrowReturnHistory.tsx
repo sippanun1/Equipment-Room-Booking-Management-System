@@ -2,7 +2,7 @@ import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import Header from "../../components/Header"
 import SendEmailModal from "../../components/SendEmailModal"
-import { collection, getDocs, query, orderBy } from "firebase/firestore"
+import { collection, getDocs, query, orderBy, deleteDoc, doc } from "firebase/firestore"
 import { db } from "../../firebase/firebase"
 import { useAuth } from "../../hooks/useAuth"
 import { logAdminAction } from "../../utils/adminLogger"
@@ -29,6 +29,9 @@ export default function BorrowReturnHistory() {
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [showEmailModal, setShowEmailModal] = useState(false)
   const [emailBorrowData, setEmailBorrowData] = useState<BorrowTransaction | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
+  const [deleteMessage, setDeleteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -190,6 +193,57 @@ export default function BorrowReturnHistory() {
     }
   }
 
+  // Delete functions
+  const toggleSelectId = (id: string) => {
+    const newSelected = new Set(selectedIds)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
+    }
+    setSelectedIds(newSelected)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredTransactions.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(filteredTransactions.map(t => t.borrowId)))
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    try {
+      let successCount = 0
+      for (const id of selectedIds) {
+        try {
+          await deleteDoc(doc(db, "borrowHistory", id))
+          successCount++
+        } catch (error) {
+          console.error(`Error deleting transaction ${id}:`, error)
+        }
+      }
+      
+      // Update state
+      setTransactions(prev => prev.filter(t => !selectedIds.has(t.borrowId)))
+      setSelectedIds(new Set())
+      setShowBulkDeleteConfirm(false)
+      
+      setDeleteMessage({
+        type: 'success',
+        text: `ลบประวัติ ${successCount} รายการสำเร็จ`
+      })
+      
+      setTimeout(() => setDeleteMessage(null), 3000)
+    } catch (error) {
+      console.error("Error deleting transactions:", error)
+      setDeleteMessage({
+        type: 'error',
+        text: 'เกิดข้อผิดพลาดในการลบข้อมูล'
+      })
+    }
+  }
+
   return (
     <div
       className="
@@ -201,6 +255,15 @@ export default function BorrowReturnHistory() {
     >
       {/* ===== HEADER ===== */}
       <Header title="ประวัติการยืมและคืน" />
+
+      {/* Success/Error Message */}
+      {deleteMessage && (
+        <div className={`fixed top-4 right-4 z-40 px-4 py-3 rounded-lg text-white font-medium shadow-lg ${
+          deleteMessage.type === 'success' ? 'bg-green-500' : 'bg-red-500'
+        }`}>
+          {deleteMessage.text}
+        </div>
+      )}
 
       {/* ===== CONTENT ===== */}
       <div className="mt-6 flex justify-center">
@@ -399,69 +462,104 @@ export default function BorrowReturnHistory() {
               กำลังโหลด...
             </div>
           ) : filteredTransactions.length > 0 ? (
-            <div className="w-full space-y-3">
-              {filteredTransactions.map((txn) => (
-                <div
-                  key={txn.borrowId}
-                  onClick={() => setDetailsModal(txn)}
-                  className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md cursor-pointer transition"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    {/* Left side - Basic info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="font-bold text-gray-900 text-base">
-                          {txn.userName}
-                        </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(txn.status)}`}>
-                          {getStatusText(txn.status)}
-                        </span>
-                      </div>
+            <>
+              {/* Bulk Delete Toolbar */}
+              {selectedIds.size > 0 && (
+                <div className="w-full mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                  <span className="text-sm font-medium text-blue-800">
+                    เลือกแล้ว {selectedIds.size} รายการ
+                  </span>
+                  <button
+                    onClick={() => setShowBulkDeleteConfirm(true)}
+                    className="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition"
+                  >
+                    🗑️ ลบ
+                  </button>
+                </div>
+              )}
+              
+              <div className="w-full space-y-3">
+                {/* Select All Checkbox */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === filteredTransactions.length && filteredTransactions.length > 0}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 cursor-pointer"
+                  />
+                  <span className="text-sm font-medium text-gray-700">เลือกทั้งหมด</span>
+                </div>
+                
+                {filteredTransactions.map((txn) => (
+                  <div
+                    key={txn.borrowId}
+                    className={`bg-white border rounded-lg p-4 hover:shadow-md cursor-pointer transition ${
+                      selectedIds.has(txn.borrowId) ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(txn.borrowId)}
+                        onChange={() => toggleSelectId(txn.borrowId)}
+                        className="w-4 h-4 mt-1 cursor-pointer"
+                      />
                       
-                      <div className="text-sm text-gray-600 mb-2">
-                        {txn.equipmentItems.map((item, idx) => (
-                          <div key={idx}>
-                            {item.equipmentName} (
-                            {item.quantityReturned !== undefined && item.quantityReturned !== item.quantityBorrowed 
-                              ? `ยืม ${item.quantityBorrowed} / คืน ${item.quantityReturned}` 
-                              : `${item.quantityBorrowed}`
-                            } ชิ้น)
-                            {item.assetCodes && item.assetCodes.length > 0 && (
-                              <div className="text-xs text-blue-600 mt-0.5">
-                                รหัส: {item.assetCodes.join(", ")}
-                              </div>
-                            )}
+                      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setDetailsModal(txn)}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="font-bold text-gray-900 text-base">
+                            {txn.userName}
                           </div>
-                        ))}
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusColor(txn.status)}`}>
+                            {getStatusText(txn.status)}
+                          </span>
+                        </div>
+                        
+                        <div className="text-sm text-gray-600 mb-2">
+                          {txn.equipmentItems.map((item, idx) => (
+                            <div key={idx}>
+                              {item.equipmentName} (
+                              {item.quantityReturned !== undefined && item.quantityReturned !== item.quantityBorrowed 
+                                ? `ยืม ${item.quantityBorrowed} / คืน ${item.quantityReturned}` 
+                                : `${item.quantityBorrowed}`
+                              } ชิ้น)
+                              {item.assetCodes && item.assetCodes.length > 0 && (
+                                <div className="text-xs text-blue-600 mt-0.5">
+                                  รหัส: {item.assetCodes.join(", ")}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-4 text-xs text-gray-500">
+                          <div>
+                            <span className="font-medium">ยืม:</span> {txn.borrowDate} {txn.borrowTime}
+                          </div>
+                          <div>
+                            <span className="font-medium">คืน:</span> {txn.actualReturnDate || txn.expectedReturnDate}
+                          </div>
+                        </div>
                       </div>
                       
-                      <div className="flex flex-wrap gap-4 text-xs text-gray-500">
-                        <div>
-                          <span className="font-medium">ยืม:</span> {txn.borrowDate} {txn.borrowTime}
-                        </div>
-                        <div>
-                          <span className="font-medium">คืน:</span> {txn.actualReturnDate || txn.expectedReturnDate}
-                        </div>
+                      {/* Right side - Status badge or action indicator */}
+                      <div className="text-right text-xs flex-shrink-0">
+                        {txn.status === "borrowed" && !txn.acknowledgedAt && (
+                          <div className="bg-yellow-50 text-yellow-700 px-2 py-1 rounded">
+                            รอการรับทราบ
+                          </div>
+                        )}
+                        {txn.acknowledgedBy && (
+                          <div className="text-gray-500 text-[11px] mt-1">
+                            รับทราบ: {txn.acknowledgedBy}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    
-                    {/* Right side - Status badge or action indicator */}
-                    <div className="text-right text-xs">
-                      {txn.status === "borrowed" && !txn.acknowledgedAt && (
-                        <div className="bg-yellow-50 text-yellow-700 px-2 py-1 rounded">
-                          รอการรับทราบ
-                        </div>
-                      )}
-                      {txn.acknowledgedBy && (
-                        <div className="text-gray-500 text-[11px] mt-1">
-                          รับทราบ: {txn.acknowledgedBy}
-                        </div>
-                      )}
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </>
           ) : (
             <div className="w-full text-center text-gray-500 py-8">
               {searchTerm || filter !== "all"
@@ -871,6 +969,35 @@ export default function BorrowReturnHistory() {
           setEmailBorrowData(null)
         }}
       />
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 backdrop-blur-xs bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg p-6 max-w-sm w-full">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">ยืนยันการลบ</h3>
+            <p className="text-gray-700 mb-4">
+              คุณแน่ใจหรือไม่ว่าต้องการลบประวัติ {selectedIds.size} รายการ?
+            </p>
+            <p className="text-sm text-gray-600 mb-6">
+              การกระทำนี้ไม่สามารถยกเลิกได้
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowBulkDeleteConfirm(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-100 transition"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                className="flex-1 px-4 py-2 bg-red-500 text-white font-medium rounded-lg hover:bg-red-600 transition"
+              >
+                ลบ {selectedIds.size} รายการ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
