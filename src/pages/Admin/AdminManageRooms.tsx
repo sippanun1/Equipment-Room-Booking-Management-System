@@ -519,7 +519,7 @@ export default function AdminManageRooms() {
 
       {/* ===== CONTENT ===== */}
       <div className="mt-6 flex justify-center">
-        <div className="w-full max-w-[360px] px-4 flex flex-col items-center pb-6">
+        <div className="w-full max-w-2xl px-4 flex flex-col items-center pb-6">
         {/* Back and Add Room Buttons */}
           <div className="w-full flex gap-3 mt-6 mb-6">
             <button
@@ -578,47 +578,75 @@ export default function AdminManageRooms() {
           </div>
 
           {/* Table Headers */}
-          <div className="w-full mb-4 grid grid-cols-4 gap-2 text-xs font-semibold text-gray-700">
-            <div>เลขห้อง</div>
-            <div>ประเภท</div>
-            <div>สถานะ</div>
-            <div>การจัดการ</div>
-          </div>
+          {/* Removed table headers - now using cards */}
 
-          {/* Rooms List */}
-          <div className="w-full flex flex-col gap-3">
+          {/* Rooms List - Card Layout */}
+          <div className="w-full grid grid-cols-2 gap-4">
             {loading ? (
-              <div className="text-center py-8">
+              <div className="col-span-2 text-center py-8">
                 <p className="text-gray-500">กำลังโหลดข้อมูล...</p>
               </div>
             ) : filteredRooms.length > 0 ? (
               filteredRooms.map((room) => (
-                <div key={room.id} className="w-full grid grid-cols-4 gap-2 items-center text-xs border-b pb-3">
+                <div 
+                  key={room.id} 
+                  className="
+                    bg-blue-50
+                    rounded-lg
+                    p-4
+                    border border-blue-200
+                    overflow-hidden
+                  "
+                >
+                  {/* Room Image */}
+                  <div className="mb-3 rounded-lg overflow-hidden h-32 bg-gray-200 flex items-center justify-center">
+                    {room.image && room.image.startsWith('data:image') ? (
+                      <img 
+                        src={room.image} 
+                        alt={room.code}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-4xl">🏢</span>
+                    )}
+                  </div>
+
                   {/* Room Code */}
-                  <div className="font-semibold">{room.code}</div>
+                  <h3 className="text-sm font-semibold text-gray-800 mb-2">
+                    {room.code}
+                  </h3>
 
                   {/* Room Type */}
-                  <div className="text-gray-600">{room.type}</div>
+                  <p className="text-xs text-gray-600 mb-3">
+                    ประเภท: {room.type}
+                  </p>
 
-                  {/* Status Button - Click to view schedule */}
-                  <div>
+                  {/* Action Buttons */}
+                  <div className="flex gap-2">
                     <button
                       onClick={() => handleShowSchedule(room.id)}
-                      className="px-3 py-1 bg-green-500 text-white text-xs font-semibold rounded hover:bg-purple-600 transition"
+                      className="
+                        flex-1
+                        py-2
+                        rounded
+                        bg-green-500
+                        text-white
+                        text-xs font-semibold
+                        hover:bg-green-600
+                        transition
+                      "
                     >
                       ดูการจอง
                     </button>
-                  </div>
-
-                  {/* Action Button */}
-                  <div className="flex gap-2">
                     <button
                       onClick={() => handleEditRoom(room.id)}
                       className="
-                        px-3 py-1
-                        bg-blue-500
-                        text-white text-xs font-semibold
+                        flex-1
+                        py-2
                         rounded
+                        bg-blue-500
+                        text-white
+                        text-xs font-semibold
                         hover:bg-blue-600
                         transition
                       "
@@ -628,10 +656,12 @@ export default function AdminManageRooms() {
                     <button
                       onClick={() => handleDeleteRoom(room.id)}
                       className="
-                        px-3 py-1
-                        bg-red-500
-                        text-white text-xs font-semibold
+                        flex-1
+                        py-2
                         rounded
+                        bg-red-500
+                        text-white
+                        text-xs font-semibold
                         hover:bg-red-600
                         transition
                       "
@@ -642,7 +672,7 @@ export default function AdminManageRooms() {
                 </div>
               ))
             ) : (
-              <div className="w-full text-center text-gray-500 py-8">
+              <div className="col-span-2 w-full text-center text-gray-500 py-8">
                 ไม่พบห้องที่ค้นหา
               </div>
             )}
