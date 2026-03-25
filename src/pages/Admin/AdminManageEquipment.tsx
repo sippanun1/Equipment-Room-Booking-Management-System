@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, writeBatch, query, where } from "firebase/firestore"
 import { db } from "../../firebase/firebase"
 import Header from "../../components/Header"
@@ -79,13 +79,15 @@ interface EditEquipmentForm {
 
 export default function AdminManageEquipment() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAuth()
+  const initialStockFilter = (location.state as any)?.stockFilter as "all" | "outOfStock" | "lowStock" | undefined
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<"all" | "consumable" | "asset" | "main">("all")
-  const [selectedStockStatus, setSelectedStockStatus] = useState<"all" | "outOfStock" | "lowStock">("all")
+  const [selectedStockStatus, setSelectedStockStatus] = useState<"all" | "outOfStock" | "lowStock">(initialStockFilter || "all")
   const [selectedEquipmentType, setSelectedEquipmentType] = useState<string>("all")
   const [selectedEquipmentSubType, setSelectedEquipmentSubType] = useState<string>("all")
-  const [showStockStatusFilter, setShowStockStatusFilter] = useState(false)
+  const [showStockStatusFilter, setShowStockStatusFilter] = useState(!!initialStockFilter)
   const [showAddStockModal, setShowAddStockModal] = useState(false)
   const [showAddEquipmentModal, setShowAddEquipmentModal] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)

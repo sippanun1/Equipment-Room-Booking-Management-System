@@ -196,12 +196,46 @@ export default function AdminDashboard() {
                   )
                 })()}
               </div>
-              <button
-                onClick={() => navigate('/admin/manage-equipment')}
-                className="w-full py-2 bg-orange-500 text-white text-sm font-semibold rounded-full hover:bg-orange-600 transition"
-              >
-                ไปจัดการอุปกรณ์
-              </button>
+              {(() => {
+                const outOfStockCount = lowStockItems.filter(item => item.quantity === 0).length
+                const lowStockCount = lowStockItems.filter(item => item.quantity > 0).length
+                if (outOfStockCount > 0 && lowStockCount > 0) {
+                  return (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => navigate('/admin/manage-equipment', { state: { stockFilter: 'outOfStock' } })}
+                        className="flex-1 py-2 bg-red-700 text-white text-sm font-semibold rounded-full hover:bg-red-800 transition"
+                      >
+                        หมดสต๊อก ({outOfStockCount})
+                      </button>
+                      <button
+                        onClick={() => navigate('/admin/manage-equipment', { state: { stockFilter: 'lowStock' } })}
+                        className="flex-1 py-2 bg-red-500 text-white text-sm font-semibold rounded-full hover:bg-red-600 transition"
+                      >
+                        สต๊อกใกล้หมด ({lowStockCount})
+                      </button>
+                    </div>
+                  )
+                }
+                if (outOfStockCount > 0) {
+                  return (
+                    <button
+                      onClick={() => navigate('/admin/manage-equipment', { state: { stockFilter: 'outOfStock' } })}
+                      className="w-full py-2 bg-orange-500 text-white text-sm font-semibold rounded-full hover:bg-orange-600 transition"
+                    >
+                      ดูรายการหมดสต๊อก
+                    </button>
+                  )
+                }
+                return (
+                  <button
+                    onClick={() => navigate('/admin/manage-equipment', { state: { stockFilter: 'lowStock' } })}
+                    className="w-full py-2 bg-orange-500 text-white text-sm font-semibold rounded-full hover:bg-orange-600 transition"
+                  >
+                    ดูรายการสต๊อกน้อย
+                  </button>
+                )
+              })()}
             </div>
           )}
 
