@@ -84,6 +84,7 @@ export default function AdminManageEquipment() {
   const [selectedCategory, setSelectedCategory] = useState<"all" | "consumable" | "asset" | "main">("all")
   const [selectedStockStatus, setSelectedStockStatus] = useState<"all" | "outOfStock" | "lowStock">("all")
   const [selectedEquipmentType, setSelectedEquipmentType] = useState<string>("all")
+  const [selectedEquipmentSubType, setSelectedEquipmentSubType] = useState<string>("all")
   const [showStockStatusFilter, setShowStockStatusFilter] = useState(false)
   const [showAddStockModal, setShowAddStockModal] = useState(false)
   const [showAddEquipmentModal, setShowAddEquipmentModal] = useState(false)
@@ -261,6 +262,10 @@ export default function AdminManageEquipment() {
     // Filter by equipment type
     const matchesEquipmentType = selectedEquipmentType === "all" || 
       (item.equipmentTypes && Array.isArray(item.equipmentTypes) && item.equipmentTypes.includes(selectedEquipmentType))
+
+    // Filter by equipment subtype
+    const matchesEquipmentSubType = selectedEquipmentSubType === "all" ||
+      (item.equipmentSubTypes && Array.isArray(item.equipmentSubTypes) && item.equipmentSubTypes.includes(selectedEquipmentSubType))
     
     // Filter by stock status (only for consumables)
     let matchesStockStatus = true
@@ -272,7 +277,7 @@ export default function AdminManageEquipment() {
       }
     }
     
-    return matchesSearch && matchesCategory && matchesStockStatus && matchesEquipmentType
+    return matchesSearch && matchesCategory && matchesStockStatus && matchesEquipmentType && matchesEquipmentSubType
   })
 
   const handleAddEquipment = () => {
@@ -1107,7 +1112,7 @@ export default function AdminManageEquipment() {
             >
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-gray-700">🔧 ตัวกรอง</span>
-                {(selectedCategory !== "all" || selectedStockStatus !== "all") && (
+                {(selectedCategory !== "all" || selectedStockStatus !== "all" || selectedEquipmentType !== "all" || selectedEquipmentSubType !== "all") && (
                   <span className="px-2 py-0.5 bg-blue-100 text-blue-600 text-xs rounded-full">
                     กำลังใช้งาน
                   </span>
@@ -1182,7 +1187,7 @@ export default function AdminManageEquipment() {
                     <p className="text-xs font-semibold text-gray-600 mb-2">ประเภทอุปกรณ์:</p>
                     <div className="flex gap-2 flex-wrap">
                       <button
-                        onClick={() => setSelectedEquipmentType("all")}
+                        onClick={() => { setSelectedEquipmentType("all"); setSelectedEquipmentSubType("all") }}
                         className={`
                           px-3 py-1.5 rounded-full text-xs font-medium transition
                           ${
@@ -1197,7 +1202,7 @@ export default function AdminManageEquipment() {
                       {uniqueEquipmentTypes.map((type) => (
                         <button
                           key={type}
-                          onClick={() => setSelectedEquipmentType(type)}
+                          onClick={() => { setSelectedEquipmentType(type); setSelectedEquipmentSubType("all") }}
                           className={`
                             px-3 py-1.5 rounded-full text-xs font-medium transition
                             ${
@@ -1214,6 +1219,44 @@ export default function AdminManageEquipment() {
                   </div>
                 )}
 
+                {/* SubType Filter */}
+                {selectedEquipmentType !== "all" && equipmentTypes[selectedEquipmentType]?.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold text-gray-600 mb-2">ประเภทย่อย:</p>
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        onClick={() => setSelectedEquipmentSubType("all")}
+                        className={`
+                          px-3 py-1.5 rounded-full text-xs font-medium transition
+                          ${
+                            selectedEquipmentSubType === "all"
+                              ? "bg-blue-500 text-white"
+                              : "border border-gray-300 text-gray-700 hover:border-blue-500"
+                          }
+                        `}
+                      >
+                        ทั้งหมด
+                      </button>
+                      {equipmentTypes[selectedEquipmentType].map((subType) => (
+                        <button
+                          key={subType}
+                          onClick={() => setSelectedEquipmentSubType(subType)}
+                          className={`
+                            px-3 py-1.5 rounded-full text-xs font-medium transition
+                            ${
+                              selectedEquipmentSubType === subType
+                                ? "bg-blue-500 text-white"
+                                : "border border-gray-300 text-gray-700 hover:border-blue-500"
+                            }
+                          `}
+                        >
+                          {subType}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Clear Filters Button */}
                 <div className="pt-3 border-t border-gray-200">
                   <button
@@ -1221,6 +1264,7 @@ export default function AdminManageEquipment() {
                       setSelectedCategory("all")
                       setSelectedStockStatus("all")
                       setSelectedEquipmentType("all")
+                      setSelectedEquipmentSubType("all")
                     }}
                     className="text-xs text-gray-500 hover:text-red-500 transition flex items-center gap-1"
                   >

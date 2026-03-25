@@ -47,6 +47,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   const [currentDate, setCurrentDate] = useState<string>("")
   const [currentTime, setCurrentTime] = useState<string>("")
   const [searchTerm, setSearchTerm] = useState<string>("")
+  const [selectedCategory, setSelectedCategory] = useState<"all" | "consumable" | "asset" | "main">("all")
   const [selectedType, setSelectedType] = useState<string>("ทั้งหมด")
   const [selectedSubType, setSelectedSubType] = useState<string>("ทั้งหมด")
   const [showFilters, setShowFilters] = useState(false)
@@ -58,7 +59,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   const [loading, setLoading] = useState(true)
 
   // Check if any filter is active
-  const hasActiveFilters = selectedType !== "ทั้งหมด" || selectedSubType !== "ทั้งหมด"
+  const hasActiveFilters = selectedCategory !== "all" || selectedType !== "ทั้งหมด" || selectedSubType !== "ทั้งหมด"
 
   useEffect(() => {
     const updateDateTime = () => {
@@ -140,6 +141,11 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   useEffect(() => {
     let filtered = equipmentData
 
+    // Filter by category
+    if (selectedCategory !== "all") {
+      filtered = filtered.filter(item => item.category === selectedCategory)
+    }
+
     // Filter by type
     if (selectedType !== "ทั้งหมด") {
       filtered = filtered.filter(item => item.equipmentTypes?.includes(selectedType))
@@ -157,7 +163,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
     }
 
     setFilteredEquipment(filtered)
-  }, [searchTerm, selectedType, selectedSubType, equipmentData])
+  }, [searchTerm, selectedCategory, selectedType, selectedSubType, equipmentData])
 
   // Reset subtype when type changes
   useEffect(() => {
@@ -167,7 +173,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [searchTerm, selectedType, selectedSubType])
+  }, [searchTerm, selectedCategory, selectedType, selectedSubType])
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredEquipment.length / ITEMS_PER_PAGE)
@@ -350,8 +356,38 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
             {/* Collapsible Filter Content */}
             {showFilters && (
               <div className="px-4 pb-4 border-t border-gray-200">
-                {/* Type Filters */}
+                {/* Category Filter */}
                 <div className="mt-4 mb-4">
+                  <div className="text-xs font-semibold text-gray-600 mb-2">หมวดหมู่:</div>
+                  <div className="flex gap-2 flex-wrap">
+                    {([
+                      { key: "all", label: "ทั้งหมด" },
+                      { key: "consumable", label: "วัสดุสิ้นเปลือง" },
+                      { key: "asset", label: "ครุภัณฑ์" },
+                      { key: "main", label: "เครื่องจักร" },
+                    ] as const).map((cat) => (
+                      <button
+                        key={cat.key}
+                        onClick={() => setSelectedCategory(cat.key)}
+                        className={`
+                          px-4 py-2
+                          rounded-full
+                          text-sm font-medium
+                          transition
+                          ${selectedCategory === cat.key
+                            ? "bg-orange-500 text-white"
+                            : "border border-gray-300 text-gray-700 hover:border-orange-500"
+                          }
+                        `}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Type Filters */}
+                <div className="mt-0 mb-4">
                   <div className="text-xs font-semibold text-gray-600 mb-2">ประเภท:</div>
                   <div className="flex gap-2 flex-wrap">
                     <button
@@ -437,6 +473,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                   <div className="pt-3 border-t border-gray-200">
                     <button
                       onClick={() => {
+                        setSelectedCategory("all")
                         setSelectedType("ทั้งหมด")
                         setSelectedSubType("ทั้งหมด")
                       }}
