@@ -5,7 +5,7 @@ import { db } from '../firebase/firebase'
 interface LogAdminActionParams {
   user: User
   action: 'add' | 'edit' | 'delete' | 'update' | 'confirm' | 'cancel' | 'acknowledge'
-  type: 'equipment' | 'room' | 'borrow'
+  type: 'equipment' | 'room' | 'borrow' | 'equipmentType'
   itemName: string
   details: string
   adminName?: string // Optional: pass if already available to avoid read

@@ -165,6 +165,12 @@ export default function AdminManageEquipment() {
   const [selectedTypeToDelete, setSelectedTypeToDelete] = useState<string>("")
   const [selectedSubTypeToDelete, setSelectedSubTypeToDelete] = useState<string>("")
   const [showDeleteTypeConfirm, setShowDeleteTypeConfirm] = useState(false)
+  const [editingTypeName, setEditingTypeName] = useState<string | null>(null)
+  const [editingTypeNewName, setEditingTypeNewName] = useState("")
+  const [editingSubType, setEditingSubType] = useState<{ typeName: string; subType: string } | null>(null)
+  const [editingSubTypeNewName, setEditingSubTypeNewName] = useState("")
+  const [addSubTypeToType, setAddSubTypeToType] = useState<string | null>(null)
+  const [addSubTypeInput, setAddSubTypeInput] = useState("")
   const [equipment, setEquipment] = useState<Equipment[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -690,6 +696,100 @@ export default function AdminManageEquipment() {
     } catch (error) {
       console.error("Error deleting type:", error)
       alert(`เกิดข้อผิดพลาด: ${error instanceof Error ? error.message : 'ไม่สามารถลบข้อมูล'}`)
+    }
+  }
+
+  const handleEditTypeNameConfirm = async () => {
+    if (!editingTypeName || !editingTypeNewName.trim()) return
+    if (editingTypeNewName.trim() === editingTypeName) { setEditingTypeName(null); return }
+    if (equipmentTypes[editingTypeNewName.trim()]) { alert("ประเภทนี้มีอยู่แล้ว"); return }
+    const oldName = editingTypeName
+    const newName = editingTypeNewName.trim()
+    try {
+      const querySnapshot = await getDocs(collection(db, "equipmentTypes"))
+      for (const docSnap of querySnapshot.docs) {
+        if (docSnap.data().name === oldName) {
+          await updateDoc(doc(db, "equipmentTypes", docSnap.id), { name: newName })
+          break
+        }
+      }
+      const updatedTypes = { ...equipmentTypes }
+      updatedTypes[newName] = updatedTypes[oldName]
+      delete updatedTypes[oldName]
+      setEquipmentTypes(updatedTypes)
+      setEquipment(equipment.map(item => ({
+        ...item,
+        equipmentTypes: item.equipmentTypes?.map(t => t === oldName ? newName : t) || []
+      })))
+      if (user) {
+        logAdminAction({ user, action: 'edit', type: 'equipmentType', itemName: oldName, details: `เปลี่ยนชื่อประเภท: ${oldName} → ${newName}` })
+      }
+      setEditingTypeName(null)
+      setEditingTypeNewName("")
+      setSuccessMessage(`เปลี่ยนชื่อประเภท '${oldName}' เป็น '${newName}' สำเร็จ!`)
+      setShowSuccessModal(true)
+    } catch (error) {
+      console.error("Error editing type name:", error)
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล")
+    }
+  }
+
+  const handleEditSubTypeConfirm = async () => {
+    if (!editingSubType || !editingSubTypeNewName.trim()) return
+    const { typeName, subType } = editingSubType
+    const newSub = editingSubTypeNewName.trim()
+    if (newSub === subType) { setEditingSubType(null); return }
+    if (equipmentTypes[typeName]?.includes(newSub)) { alert("ประเภทย่อยนี้มีอยู่แล้ว"); return }
+    try {
+      const newSubTypes = equipmentTypes[typeName].map(s => s === subType ? newSub : s)
+      const querySnapshot = await getDocs(collection(db, "equipmentTypes"))
+      for (const docSnap of querySnapshot.docs) {
+        if (docSnap.data().name === typeName) {
+          await updateDoc(doc(db, "equipmentTypes", docSnap.id), { subTypes: newSubTypes })
+          break
+        }
+      }
+      setEquipmentTypes({ ...equipmentTypes, [typeName]: newSubTypes })
+      setEquipment(equipment.map(item => ({
+        ...item,
+        equipmentSubTypes: item.equipmentSubTypes?.map(s => s === subType ? newSub : s) || []
+      })))
+      if (user) {
+        logAdminAction({ user, action: 'edit', type: 'equipmentType', itemName: typeName, details: `เปลี่ยนชื่อประเภทย่อย: ${subType} → ${newSub}` })
+      }
+      setEditingSubType(null)
+      setEditingSubTypeNewName("")
+      setSuccessMessage(`เปลี่ยนชื่อประเภทย่อย '${subType}' เป็น '${newSub}' สำเร็จ!`)
+      setShowSuccessModal(true)
+    } catch (error) {
+      console.error("Error editing subtype:", error)
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล")
+    }
+  }
+
+  const handleAddSubTypeToExisting = async (typeName: string, newSubType: string) => {
+    if (!newSubType.trim()) return
+    if (equipmentTypes[typeName]?.includes(newSubType.trim())) { alert("ประเภทย่อยนี้มีอยู่แล้ว"); return }
+    try {
+      const newSubTypes = [...(equipmentTypes[typeName] || []), newSubType.trim()]
+      const querySnapshot = await getDocs(collection(db, "equipmentTypes"))
+      for (const docSnap of querySnapshot.docs) {
+        if (docSnap.data().name === typeName) {
+          await updateDoc(doc(db, "equipmentTypes", docSnap.id), { subTypes: newSubTypes })
+          break
+        }
+      }
+      setEquipmentTypes({ ...equipmentTypes, [typeName]: newSubTypes })
+      if (user) {
+        logAdminAction({ user, action: 'add', type: 'equipmentType', itemName: typeName, details: `เพิ่มประเภทย่อย: ${newSubType.trim()}` })
+      }
+      setAddSubTypeToType(null)
+      setAddSubTypeInput("")
+      setSuccessMessage(`เพิ่มประเภทย่อย '${newSubType.trim()}' ใน '${typeName}' สำเร็จ!`)
+      setShowSuccessModal(true)
+    } catch (error) {
+      console.error("Error adding subtype:", error)
+      alert("เกิดข้อผิดพลาดในการบันทึกข้อมูล")
     }
   }
 
@@ -2795,37 +2895,108 @@ export default function AdminManageEquipment() {
             <div className="p-6 flex flex-col gap-4">
               {Object.keys(equipmentTypes).map((typeName) => (
                 <div key={typeName} className="border border-gray-200 rounded-lg p-4">
-                  {/* Type Name with Delete Button */}
-                  <div className="flex justify-between items-start gap-2 mb-3">
-                    <h3 className="font-semibold text-gray-800">{typeName}</h3>
-                    <button
-                      onClick={() => handleDeleteType(typeName)}
-                      className="text-red-500 hover:text-red-700 text-sm font-medium hover:bg-red-50 px-2 py-1 rounded transition"
-                    >
-                      ลบ
-                    </button>
-                  </div>
-
-                  {/* SubTypes */}
-                  {equipmentTypes[typeName] && equipmentTypes[typeName].length > 0 ? (
-                    <div className="space-y-2">
-                      {equipmentTypes[typeName].map((subType) => (
-                        <div
-                          key={subType}
-                          className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded"
-                        >
-                          <span className="text-sm text-gray-700">{subType}</span>
+                  {/* Type Name row */}
+                  <div className="flex justify-between items-center gap-2 mb-3">
+                    {editingTypeName === typeName ? (
+                      <div className="flex-1 flex gap-2">
+                        <input
+                          type="text"
+                          value={editingTypeNewName}
+                          onChange={(e) => setEditingTypeNewName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleEditTypeNameConfirm() }}
+                          className="flex-1 border border-blue-400 rounded px-2 py-1 text-sm focus:outline-none"
+                          autoFocus
+                        />
+                        <button onClick={handleEditTypeNameConfirm} className="text-blue-500 hover:text-blue-700 text-sm font-medium hover:bg-blue-50 px-2 py-1 rounded transition">บันทึก</button>
+                        <button onClick={() => { setEditingTypeName(null); setEditingTypeNewName("") }} className="text-gray-500 hover:text-gray-700 text-sm font-medium hover:bg-gray-50 px-2 py-1 rounded transition">ยกเลิก</button>
+                      </div>
+                    ) : (
+                      <>
+                        <h3 className="font-semibold text-gray-800">{typeName}</h3>
+                        <div className="flex gap-1 shrink-0">
                           <button
-                            onClick={() => handleDeleteSubType(typeName, subType)}
-                            className="text-red-500 hover:text-red-700 text-xs font-medium"
+                            onClick={() => { setEditingTypeName(typeName); setEditingTypeNewName(typeName) }}
+                            className="text-blue-500 hover:text-blue-700 text-sm font-medium hover:bg-blue-50 px-2 py-1 rounded transition"
+                          >
+                            แก้ไข
+                          </button>
+                          <button
+                            onClick={() => handleDeleteType(typeName)}
+                            className="text-red-500 hover:text-red-700 text-sm font-medium hover:bg-red-50 px-2 py-1 rounded transition"
                           >
                             ลบ
                           </button>
                         </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* SubTypes */}
+                  {equipmentTypes[typeName] && equipmentTypes[typeName].length > 0 ? (
+                    <div className="space-y-2 mb-3">
+                      {equipmentTypes[typeName].map((subType) => (
+                        <div key={subType} className="flex justify-between items-center bg-gray-50 px-3 py-2 rounded">
+                          {editingSubType?.typeName === typeName && editingSubType?.subType === subType ? (
+                            <div className="flex-1 flex gap-2">
+                              <input
+                                type="text"
+                                value={editingSubTypeNewName}
+                                onChange={(e) => setEditingSubTypeNewName(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleEditSubTypeConfirm() }}
+                                className="flex-1 border border-blue-400 rounded px-2 py-1 text-xs focus:outline-none"
+                                autoFocus
+                              />
+                              <button onClick={handleEditSubTypeConfirm} className="text-blue-500 hover:text-blue-700 text-xs font-medium">บันทึก</button>
+                              <button onClick={() => { setEditingSubType(null); setEditingSubTypeNewName("") }} className="text-gray-500 hover:text-gray-700 text-xs font-medium">ยกเลิก</button>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="text-sm text-gray-700">{subType}</span>
+                              <div className="flex gap-2 shrink-0">
+                                <button
+                                  onClick={() => { setEditingSubType({ typeName, subType }); setEditingSubTypeNewName(subType) }}
+                                  className="text-blue-500 hover:text-blue-700 text-xs font-medium"
+                                >
+                                  แก้ไข
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteSubType(typeName, subType)}
+                                  className="text-red-500 hover:text-red-700 text-xs font-medium"
+                                >
+                                  ลบ
+                                </button>
+                              </div>
+                            </>
+                          )}
+                        </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-gray-500">ไม่มีประเภทย่อย</p>
+                    <p className="text-xs text-gray-500 mb-3">ไม่มีประเภทย่อย</p>
+                  )}
+
+                  {/* Add SubType to this existing type */}
+                  {addSubTypeToType === typeName ? (
+                    <div className="flex gap-2 mt-1">
+                      <input
+                        type="text"
+                        value={addSubTypeInput}
+                        onChange={(e) => setAddSubTypeInput(e.target.value)}
+                        placeholder="ชื่อประเภทย่อย"
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleAddSubTypeToExisting(typeName, addSubTypeInput) }}
+                        className="flex-1 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+                        autoFocus
+                      />
+                      <button onClick={() => handleAddSubTypeToExisting(typeName, addSubTypeInput)} className="text-blue-500 hover:text-blue-700 text-xs font-medium hover:bg-blue-50 px-2 py-1 rounded transition">เพิ่ม</button>
+                      <button onClick={() => { setAddSubTypeToType(null); setAddSubTypeInput("") }} className="text-gray-500 hover:text-gray-700 text-xs font-medium hover:bg-gray-50 px-2 py-1 rounded transition">ยกเลิก</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setAddSubTypeToType(typeName); setAddSubTypeInput("") }}
+                      className="text-xs text-blue-500 hover:text-blue-700 font-medium mt-1"
+                    >
+                      + เพิ่มประเภทย่อย
+                    </button>
                   )}
                 </div>
               ))}
