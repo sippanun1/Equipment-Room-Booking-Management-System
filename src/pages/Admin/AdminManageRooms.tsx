@@ -684,14 +684,15 @@ export default function AdminManageRooms() {
       {/* ===== MODAL FORM ===== */}
       {showModal && (
         <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-start z-50">
-          <div className="w-screen h-screen bg-white overflow-y-auto">
+          <div className="w-screen h-screen bg-white flex flex-col">
             {/* Modal Header */}
-            <div className="bg-orange-500 text-white p-4 text-center font-semibold sticky top-0">
+            <div className="bg-orange-500 text-white p-4 text-center font-semibold shrink-0">
               {editingRoomId ? "แก้ไขข้อมูลห้อง" : "เพิ่มห้องใหม่"}
             </div>
 
-            {/* Modal Content */}
-            <div className="p-6 flex flex-col gap-5 max-w-md mx-auto">
+            {/* Modal Content - scrollable */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="p-6 flex flex-col gap-5 max-w-md mx-auto pb-4">
               {/* Room Code */}
               <div>
                 <label className="text-xs font-semibold text-gray-700 block mb-2">ข้อมูล/เลขห้อง</label>
@@ -847,7 +848,12 @@ export default function AdminManageRooms() {
               </div>
 
               {/* Buttons */}
-              <div className="flex gap-3 mt-6 pb-4">
+              </div>
+            </div>
+
+            {/* Sticky Bottom Buttons */}
+            <div className="shrink-0 bg-white border-t border-gray-200 px-6 py-4">
+              <div className="flex gap-3 max-w-md mx-auto">
                 <button
                   onClick={() => setShowModal(false)}
                   className="flex-1 py-3 border border-gray-400 text-gray-600 rounded-lg font-medium hover:bg-gray-100 transition"
