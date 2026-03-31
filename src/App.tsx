@@ -1,37 +1,39 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { doc, updateDoc } from 'firebase/firestore'
 import { db } from './firebase/firebase'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import Home from './pages/Home'
-import BorrowEquipment from './pages/User/BorrowEquipment/BorrowEquipment'
-import BorrowDuringClass from './pages/User/BorrowEquipment/BorrowDuringClass'
-import BorrowForTeaching from './pages/User/BorrowEquipment/BorrowForTeaching'
-import BorrowOutsideClass from './pages/User/BorrowEquipment/BorrowOutsideClass'
-import EquipmentSelection from './pages/User/BorrowEquipment/EquipmentSelection'
-import CartSummary from './pages/User/BorrowEquipment/CartSummary'
-import ConfirmSummary from './pages/User/BorrowEquipment/ConfirmSummary'
-import CompletionPage from './pages/User/BorrowEquipment/CompletionPage'
-import ReturnEquipment from './pages/User/ReturnEquipment/ReturnEquipment'
-import ReturnSummary from './pages/User/ReturnEquipment/ReturnSummary'
-import RoomBooking from './pages/User/RoomBooking/RoomBooking'
-import RoomAvailability from './pages/User/RoomBooking/RoomAvailability'
-import RoomBookingForm from './pages/User/RoomBooking/RoomBookingForm'
-import MyRoomBookings from './pages/User/RoomBooking/MyRoomBookings'
-import ReturnRoomForm from './pages/User/RoomBooking/ReturnRoomForm'
-import AdminDashboard from './pages/Admin/AdminDashboard'
-import EquipmentConditionReport from './pages/Admin/EquipmentConditionReport'
-import AdminManageRooms from './pages/Admin/AdminManageRooms'
-import AdminManageEquipment from './pages/Admin/AdminManageEquipment'
-import RoomSchedule from './pages/Admin/RoomSchedule'
-import RoomBookingHistory from './pages/Admin/RoomBookingHistory'
-import BorrowReturnHistory from './pages/Admin/BorrowReturnHistory'
-import UserBorrowReturnHistory from './pages/User/BorrowReturnHistory'
-import AdminManagement from './pages/Admin/AdminManagement'
-import AdminManageUsers from './pages/Admin/AdminManageUsers'
-import AdminHistory from './pages/Admin/AdminHistory'
 import ProtectedRoute from './components/ProtectedRoute'
+
+// Lazy-loaded pages
+const Login = lazy(() => import('./pages/Login'))
+const Register = lazy(() => import('./pages/Register'))
+const Home = lazy(() => import('./pages/Home'))
+const BorrowEquipment = lazy(() => import('./pages/User/BorrowEquipment/BorrowEquipment'))
+const BorrowDuringClass = lazy(() => import('./pages/User/BorrowEquipment/BorrowDuringClass'))
+const BorrowForTeaching = lazy(() => import('./pages/User/BorrowEquipment/BorrowForTeaching'))
+const BorrowOutsideClass = lazy(() => import('./pages/User/BorrowEquipment/BorrowOutsideClass'))
+const EquipmentSelection = lazy(() => import('./pages/User/BorrowEquipment/EquipmentSelection'))
+const CartSummary = lazy(() => import('./pages/User/BorrowEquipment/CartSummary'))
+const ConfirmSummary = lazy(() => import('./pages/User/BorrowEquipment/ConfirmSummary'))
+const CompletionPage = lazy(() => import('./pages/User/BorrowEquipment/CompletionPage'))
+const ReturnEquipment = lazy(() => import('./pages/User/ReturnEquipment/ReturnEquipment'))
+const ReturnSummary = lazy(() => import('./pages/User/ReturnEquipment/ReturnSummary'))
+const RoomBooking = lazy(() => import('./pages/User/RoomBooking/RoomBooking'))
+const RoomAvailability = lazy(() => import('./pages/User/RoomBooking/RoomAvailability'))
+const RoomBookingForm = lazy(() => import('./pages/User/RoomBooking/RoomBookingForm'))
+const MyRoomBookings = lazy(() => import('./pages/User/RoomBooking/MyRoomBookings'))
+const ReturnRoomForm = lazy(() => import('./pages/User/RoomBooking/ReturnRoomForm'))
+const AdminDashboard = lazy(() => import('./pages/Admin/AdminDashboard'))
+const EquipmentConditionReport = lazy(() => import('./pages/Admin/EquipmentConditionReport'))
+const AdminManageRooms = lazy(() => import('./pages/Admin/AdminManageRooms'))
+const AdminManageEquipment = lazy(() => import('./pages/Admin/AdminManageEquipment'))
+const RoomSchedule = lazy(() => import('./pages/Admin/RoomSchedule'))
+const RoomBookingHistory = lazy(() => import('./pages/Admin/RoomBookingHistory'))
+const BorrowReturnHistory = lazy(() => import('./pages/Admin/BorrowReturnHistory'))
+const UserBorrowReturnHistory = lazy(() => import('./pages/User/BorrowReturnHistory'))
+const AdminManagement = lazy(() => import('./pages/Admin/AdminManagement'))
+const AdminManageUsers = lazy(() => import('./pages/Admin/AdminManageUsers'))
+const AdminHistory = lazy(() => import('./pages/Admin/AdminHistory'))
 
 export interface Equipment {
   id: string
@@ -134,6 +136,7 @@ function App() {
 
   return (
     <Router>
+      <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="text-gray-500">Loading...</div></div>}>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -167,6 +170,7 @@ function App() {
         <Route path="/admin/history" element={<ProtectedRoute element={<AdminHistory />} requiredRole="admin" />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
+      </Suspense>
     </Router>
   )
 }
