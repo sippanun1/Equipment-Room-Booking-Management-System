@@ -148,24 +148,28 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* User routes */}
-        <Route path="/home" element={<ProtectedRoute element={<Home />} />} />
-        <Route path="/borrow" element={<ProtectedRoute element={<BorrowEquipment />} />} />
-        <Route path="/borrow/during-class" element={<ProtectedRoute element={<BorrowDuringClass />} />} />
-        <Route path="/borrow/teaching" element={<ProtectedRoute element={<BorrowForTeaching />} />} />
-        <Route path="/borrow/outside" element={<ProtectedRoute element={<BorrowOutsideClass />} />} />
-        <Route path="/borrow/equipment" element={<ProtectedRoute element={<EquipmentSelection cartItems={cartItems} setCartItems={setCartItems} />} />} />
-        <Route path="/borrow/cart" element={<ProtectedRoute element={<CartSummary cartItems={cartItems} setCartItems={setCartItems} />} />} />
-        <Route path="/borrow/confirm" element={<ProtectedRoute element={<ConfirmSummary cartItems={cartItems} setCartItems={setCartItems} />} />} />
-        <Route path="/borrow/completion" element={<ProtectedRoute element={<CompletionPage cartItems={cartItems} setCartItems={setCartItems} />} />} />
-        <Route path="/return" element={<ProtectedRoute element={<ReturnEquipment returnEquipment={returnEquipment} setReturnEquipment={setReturnEquipment} />} />} />
-        <Route path="/return/summary" element={<ProtectedRoute element={<ReturnSummary returnEquipment={returnEquipment} setReturnEquipment={setReturnEquipment} />} />} />
-        <Route path="/borrow-return-history" element={<ProtectedRoute element={<UserBorrowReturnHistory />} />} />
-        <Route path="/room-booking" element={<ProtectedRoute element={<RoomBooking setBookingData={setBookingData} />} />} />
-        <Route path="/room-booking/availability" element={<ProtectedRoute element={<RoomAvailability setBookingData={setBookingData} />} />} />
-        <Route path="/room-booking/form" element={<ProtectedRoute element={bookingData ? <RoomBookingForm bookingData={bookingData} onConfirmBooking={(confirmData) => console.log('Booking confirmed:', confirmData)} /> : <Navigate to="/room-booking" />} />} />
-        <Route path="/room-booking/my-bookings" element={<ProtectedRoute element={<MyRoomBookings setReturnBookingData={setReturnBookingData} />} />} />
-        <Route path="/room-booking/return" element={<ProtectedRoute element={returnBookingData ? <ReturnRoomForm booking={returnBookingData} onConfirmReturn={handleConfirmReturn} /> : <Navigate to="/room-booking/my-bookings" />} />} />
+        {/* User routes — only registered when user role is 'user' */}
+        {role === 'user' && (
+          <>
+            <Route path="/home" element={<ProtectedRoute element={<Home />} />} />
+            <Route path="/borrow" element={<ProtectedRoute element={<BorrowEquipment />} />} />
+            <Route path="/borrow/during-class" element={<ProtectedRoute element={<BorrowDuringClass />} />} />
+            <Route path="/borrow/teaching" element={<ProtectedRoute element={<BorrowForTeaching />} />} />
+            <Route path="/borrow/outside" element={<ProtectedRoute element={<BorrowOutsideClass />} />} />
+            <Route path="/borrow/equipment" element={<ProtectedRoute element={<EquipmentSelection cartItems={cartItems} setCartItems={setCartItems} />} />} />
+            <Route path="/borrow/cart" element={<ProtectedRoute element={<CartSummary cartItems={cartItems} setCartItems={setCartItems} />} />} />
+            <Route path="/borrow/confirm" element={<ProtectedRoute element={<ConfirmSummary cartItems={cartItems} setCartItems={setCartItems} />} />} />
+            <Route path="/borrow/completion" element={<ProtectedRoute element={<CompletionPage cartItems={cartItems} setCartItems={setCartItems} />} />} />
+            <Route path="/return" element={<ProtectedRoute element={<ReturnEquipment returnEquipment={returnEquipment} setReturnEquipment={setReturnEquipment} />} />} />
+            <Route path="/return/summary" element={<ProtectedRoute element={<ReturnSummary returnEquipment={returnEquipment} setReturnEquipment={setReturnEquipment} />} />} />
+            <Route path="/borrow-return-history" element={<ProtectedRoute element={<UserBorrowReturnHistory />} />} />
+            <Route path="/room-booking" element={<ProtectedRoute element={<RoomBooking setBookingData={setBookingData} />} />} />
+            <Route path="/room-booking/availability" element={<ProtectedRoute element={<RoomAvailability setBookingData={setBookingData} />} />} />
+            <Route path="/room-booking/form" element={<ProtectedRoute element={bookingData ? <RoomBookingForm bookingData={bookingData} onConfirmBooking={(confirmData) => console.log('Booking confirmed:', confirmData)} /> : <Navigate to="/room-booking" />} />} />
+            <Route path="/room-booking/my-bookings" element={<ProtectedRoute element={<MyRoomBookings setReturnBookingData={setReturnBookingData} />} />} />
+            <Route path="/room-booking/return" element={<ProtectedRoute element={returnBookingData ? <ReturnRoomForm booking={returnBookingData} onConfirmReturn={handleConfirmReturn} /> : <Navigate to="/room-booking/my-bookings" />} />} />
+          </>
+        )}
 
         {/* Admin routes — only registered when user is admin */}
         {role === 'admin' && (
