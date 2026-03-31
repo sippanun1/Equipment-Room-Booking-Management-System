@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { collection, getDocs, deleteDoc, doc, query, where } from 'firebase/firestore'
+import { collection, getDocs, doc, query, where, writeBatch } from 'firebase/firestore'
 import { db } from '../../firebase/firebase'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
@@ -73,47 +73,42 @@ export default function AdminManageUsers() {
   })
 
   const deleteUserData = async (userId: string, userEmail: string) => {
-    // Delete user from 'users' collection
-    await deleteDoc(doc(db, 'users', userId))
+    // Query all related collections in parallel
+    const [borrowDocs, returnDocs, borrowReturnDocs, bookingsDocs, mailDocs] = await Promise.all([
+      getDocs(query(collection(db, 'borrowHistory'), where('userId', '==', userId))),
+      getDocs(query(collection(db, 'returnHistory'), where('userId', '==', userId))),
+      getDocs(query(collection(db, 'borrowReturnHistory'), where('userId', '==', userId))),
+      getDocs(query(collection(db, 'roomBookings'), where('userId', '==', userId))),
+      getDocs(query(collection(db, 'mail'), where('to', '==', userEmail))),
+    ])
 
-    // Delete user's borrow history
-    const borrowHistoryRef = collection(db, 'borrowHistory')
-    const borrowQuery = query(borrowHistoryRef, where('userId', '==', userId))
-    const borrowDocs = await getDocs(borrowQuery)
-    for (const doc of borrowDocs.docs) {
-      await deleteDoc(doc.ref)
+    // Collect all docs to delete
+    const allDocs = [
+      ...borrowDocs.docs,
+      ...returnDocs.docs,
+      ...borrowReturnDocs.docs,
+      ...bookingsDocs.docs,
+      ...mailDocs.docs,
+    ]
+
+    // Batch delete (Firestore limit: 500 ops per batch)
+    const BATCH_LIMIT = 499 // Reserve 1 for the user doc
+    let batch = writeBatch(db)
+    batch.delete(doc(db, 'users', userId))
+    let opsInBatch = 1
+
+    for (const d of allDocs) {
+      batch.delete(d.ref)
+      opsInBatch++
+      if (opsInBatch >= BATCH_LIMIT) {
+        await batch.commit()
+        batch = writeBatch(db)
+        opsInBatch = 0
+      }
     }
 
-    // Delete user's return history
-    const returnHistoryRef = collection(db, 'returnHistory')
-    const returnQuery = query(returnHistoryRef, where('userId', '==', userId))
-    const returnDocs = await getDocs(returnQuery)
-    for (const doc of returnDocs.docs) {
-      await deleteDoc(doc.ref)
-    }
-
-    // Delete user's borrow-return history
-    const borrowReturnHistoryRef = collection(db, 'borrowReturnHistory')
-    const borrowReturnQuery = query(borrowReturnHistoryRef, where('userId', '==', userId))
-    const borrowReturnDocs = await getDocs(borrowReturnQuery)
-    for (const doc of borrowReturnDocs.docs) {
-      await deleteDoc(doc.ref)
-    }
-
-    // Delete user's room bookings
-    const roomBookingsRef = collection(db, 'roomBookings')
-    const bookingsQuery = query(roomBookingsRef, where('userId', '==', userId))
-    const bookingsDocs = await getDocs(bookingsQuery)
-    for (const doc of bookingsDocs.docs) {
-      await deleteDoc(doc.ref)
-    }
-
-    // Delete user's emails from mail collection
-    const mailRef = collection(db, 'mail')
-    const mailQuery = query(mailRef, where('to', '==', userEmail))
-    const mailDocs = await getDocs(mailQuery)
-    for (const doc of mailDocs.docs) {
-      await deleteDoc(doc.ref)
+    if (opsInBatch > 0) {
+      await batch.commit()
     }
   }
 
