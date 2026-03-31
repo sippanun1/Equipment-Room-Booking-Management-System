@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
-import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, writeBatch, query, where } from "firebase/firestore"
+import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, writeBatch, query, where, limit } from "firebase/firestore"
 import { db } from "../../firebase/firebase"
 import Header from "../../components/Header"
 import { useAuth } from "../../hooks/useAuth"
 import { logAdminAction } from "../../utils/adminLogger"
-import { loadAllEquipment, addNewAsset, addAssetStock, addNewConsumable, addConsumableStock, deleteEquipment, updateEquipmentMetadata, syncMasterAvailableCount } from "../../utils/equipmentHelper"
+import { loadAllEquipment, loadEquipmentTypes as loadEquipmentTypesFromCache, invalidateEquipmentTypesCache, addNewAsset, addAssetStock, addNewConsumable, addConsumableStock, deleteEquipment, updateEquipmentMetadata, syncMasterAvailableCount } from "../../utils/equipmentHelper"
 
 // Low stock threshold for consumables (in units)
 const LOW_STOCK_THRESHOLD = 10
@@ -188,22 +188,17 @@ export default function AdminManageEquipment() {
     }
   }
 
-  // Load custom equipment types from Firestore
+  // Load custom equipment types from Firestore (cached, 10-min TTL)
   useEffect(() => {
-    const loadEquipmentTypes = async () => {
+    const loadTypes = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, "equipmentTypes"))
-        const customTypes: { [key: string]: string[] } = { ...defaultEquipmentTypes }
-        querySnapshot.forEach((doc) => {
-          const data = doc.data()
-          customTypes[data.name] = data.subTypes || []
-        })
-        setEquipmentTypes(customTypes)
+        const cachedTypes = await loadEquipmentTypesFromCache()
+        setEquipmentTypes({ ...defaultEquipmentTypes, ...cachedTypes })
       } catch (error) {
         console.error("Error loading equipment types:", error)
       }
     }
-    loadEquipmentTypes()
+    loadTypes()
   }, [])
 
   // Load equipment from Firestore on mount
@@ -594,7 +589,8 @@ export default function AdminManageEquipment() {
         subTypes: newTypeSubTypes
       })
       
-      // Update local state
+      // Update local state and invalidate cache
+      invalidateEquipmentTypesCache()
       setEquipmentTypes({
         ...equipmentTypes,
         [newTypeName]: newTypeSubTypes
@@ -639,15 +635,11 @@ export default function AdminManageEquipment() {
     try {
       if (selectedSubTypeToDelete) {
         // Delete subtype from an existing type
-        const querySnapshot = await getDocs(collection(db, "equipmentTypes"))
-        for (const docSnap of querySnapshot.docs) {
-          if (docSnap.data().name === selectedTypeToDelete) {
-            const updatedSubTypes = docSnap.data().subTypes.filter((st: string) => st !== selectedSubTypeToDelete)
-            await updateDoc(doc(db, "equipmentTypes", docSnap.id), {
-              subTypes: updatedSubTypes
-            })
-            break
-          }
+        const querySnapshot = await getDocs(query(collection(db, "equipmentTypes"), where("name", "==", selectedTypeToDelete), limit(1)))
+        if (!querySnapshot.empty) {
+          const docSnap = querySnapshot.docs[0]
+          const updatedSubTypes = docSnap.data().subTypes.filter((st: string) => st !== selectedSubTypeToDelete)
+          await updateDoc(doc(db, "equipmentTypes", docSnap.id), { subTypes: updatedSubTypes })
         }
         
         // Update local state
@@ -662,12 +654,9 @@ export default function AdminManageEquipment() {
         setSuccessMessage(`ลบประเภทย่อย '${selectedSubTypeToDelete}' สำเร็จ!`)
       } else {
         // Delete entire type from Firestore
-        const querySnapshot = await getDocs(collection(db, "equipmentTypes"))
-        for (const docSnap of querySnapshot.docs) {
-          if (docSnap.data().name === selectedTypeToDelete) {
-            await deleteDoc(doc(db, "equipmentTypes", docSnap.id))
-            break
-          }
+        const typeSnapshot = await getDocs(query(collection(db, "equipmentTypes"), where("name", "==", selectedTypeToDelete), limit(1)))
+        if (!typeSnapshot.empty) {
+          await deleteDoc(doc(db, "equipmentTypes", typeSnapshot.docs[0].id))
         }
         
         // Remove from local state
@@ -677,6 +666,8 @@ export default function AdminManageEquipment() {
         
         setSuccessMessage(`ลบประเภท '${selectedTypeToDelete}' สำเร็จ!`)
       }
+
+      invalidateEquipmentTypesCache()
 
       // Log admin action
       if (user) {
@@ -706,13 +697,11 @@ export default function AdminManageEquipment() {
     const oldName = editingTypeName
     const newName = editingTypeNewName.trim()
     try {
-      const querySnapshot = await getDocs(collection(db, "equipmentTypes"))
-      for (const docSnap of querySnapshot.docs) {
-        if (docSnap.data().name === oldName) {
-          await updateDoc(doc(db, "equipmentTypes", docSnap.id), { name: newName })
-          break
-        }
+      const typeSnapshot = await getDocs(query(collection(db, "equipmentTypes"), where("name", "==", oldName), limit(1)))
+      if (!typeSnapshot.empty) {
+        await updateDoc(doc(db, "equipmentTypes", typeSnapshot.docs[0].id), { name: newName })
       }
+      invalidateEquipmentTypesCache()
       const updatedTypes = { ...equipmentTypes }
       updatedTypes[newName] = updatedTypes[oldName]
       delete updatedTypes[oldName]
@@ -742,13 +731,11 @@ export default function AdminManageEquipment() {
     if (equipmentTypes[typeName]?.includes(newSub)) { alert("ประเภทย่อยนี้มีอยู่แล้ว"); return }
     try {
       const newSubTypes = equipmentTypes[typeName].map(s => s === subType ? newSub : s)
-      const querySnapshot = await getDocs(collection(db, "equipmentTypes"))
-      for (const docSnap of querySnapshot.docs) {
-        if (docSnap.data().name === typeName) {
-          await updateDoc(doc(db, "equipmentTypes", docSnap.id), { subTypes: newSubTypes })
-          break
-        }
+      const typeSnapshot = await getDocs(query(collection(db, "equipmentTypes"), where("name", "==", typeName), limit(1)))
+      if (!typeSnapshot.empty) {
+        await updateDoc(doc(db, "equipmentTypes", typeSnapshot.docs[0].id), { subTypes: newSubTypes })
       }
+      invalidateEquipmentTypesCache()
       setEquipmentTypes({ ...equipmentTypes, [typeName]: newSubTypes })
       setEquipment(equipment.map(item => ({
         ...item,
@@ -772,13 +759,11 @@ export default function AdminManageEquipment() {
     if (equipmentTypes[typeName]?.includes(newSubType.trim())) { alert("ประเภทย่อยนี้มีอยู่แล้ว"); return }
     try {
       const newSubTypes = [...(equipmentTypes[typeName] || []), newSubType.trim()]
-      const querySnapshot = await getDocs(collection(db, "equipmentTypes"))
-      for (const docSnap of querySnapshot.docs) {
-        if (docSnap.data().name === typeName) {
-          await updateDoc(doc(db, "equipmentTypes", docSnap.id), { subTypes: newSubTypes })
-          break
-        }
+      const typeSnapshot = await getDocs(query(collection(db, "equipmentTypes"), where("name", "==", typeName), limit(1)))
+      if (!typeSnapshot.empty) {
+        await updateDoc(doc(db, "equipmentTypes", typeSnapshot.docs[0].id), { subTypes: newSubTypes })
       }
+      invalidateEquipmentTypesCache()
       setEquipmentTypes({ ...equipmentTypes, [typeName]: newSubTypes })
       if (user) {
         logAdminAction({ user, action: 'add', type: 'equipmentType', itemName: typeName, details: `เพิ่มประเภทย่อย: ${newSubType.trim()}` })

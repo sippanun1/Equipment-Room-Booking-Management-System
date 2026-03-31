@@ -1,4 +1,4 @@
-import { collection, getDocs, addDoc, query, where, updateDoc, doc, deleteDoc, writeBatch } from 'firebase/firestore'
+import { collection, getDocs, getDoc, addDoc, query, where, updateDoc, doc, deleteDoc, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase/firebase'
 
 // Client-side cache for equipment data with TTL (5 minutes)
@@ -397,19 +397,17 @@ export async function addConsumableStock(
   quantity: number
 ): Promise<boolean> {
   try {
-    const equipmentSnapshot = await getDocs(query(collection(db, 'equipment')))
+    const docRef = doc(db, 'equipment', equipmentId)
+    const docSnap = await getDoc(docRef)
 
     let found = false
-    for (const docSnap of equipmentSnapshot.docs) {
-      if (docSnap.id === equipmentId) {
-        const currentQuantity = docSnap.data().quantity || 0
-        await updateDoc(docSnap.ref, {
-          quantity: currentQuantity + quantity,
-          available: true
-        })
-        found = true
-        break
-      }
+    if (docSnap.exists()) {
+      const currentQuantity = docSnap.data().quantity || 0
+      await updateDoc(docRef, {
+        quantity: currentQuantity + quantity,
+        available: true
+      })
+      found = true
     }
 
     // Invalidate cache after updating

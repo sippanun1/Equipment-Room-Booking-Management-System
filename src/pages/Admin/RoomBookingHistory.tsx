@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { collection, getDocs, query, orderBy, updateDoc, doc, limit, deleteDoc } from "firebase/firestore"
+import { collection, getDocs, getDoc, query, orderBy, updateDoc, doc, limit, deleteDoc } from "firebase/firestore"
 import { db } from "../../firebase/firebase"
 import Header from "../../components/Header"
 import { sendRoomBookingConfirmationToUser, sendRoomBookingRejectionToUser } from "../../utils/emailService"
@@ -157,13 +157,8 @@ export default function RoomBookingHistory() {
 
   const handleApproveBooking = async (bookingId: string) => {
     try {
-      let bookingData: any = null
-      const bookingsSnapshot = await getDocs(collection(db, "roomBookings"))
-      bookingsSnapshot.forEach((doc) => {
-        if (doc.id === bookingId) {
-          bookingData = doc.data()
-        }
-      })
+      const bookingDoc = await getDoc(doc(db, "roomBookings", bookingId))
+      const bookingData = bookingDoc.exists() ? bookingDoc.data() : null
 
       await updateDoc(doc(db, "roomBookings", bookingId), {
         status: "approved"
@@ -186,38 +181,8 @@ export default function RoomBookingHistory() {
         })
       }
 
-      // Refresh the bookings list
-      const q = query(collection(db, "roomBookings"), orderBy("date", "desc"))
-      const querySnapshot = await getDocs(q)
-      const records: RoomBookingRecord[] = []
-      querySnapshot.forEach((doc) => {
-        const data = doc.data()
-        records.push({
-          id: doc.id,
-          roomCode: data.roomCode || "",
-          roomName: data.roomCode || "",
-          roomType: data.roomType || "",
-          userName: data.userName || "",
-          userId: data.userId || "",
-          userEmail: data.userEmail || "",
-          date: data.date || "",
-          startTime: data.startTime || "",
-          endTime: data.endTime || "",
-          purpose: data.purpose || "",
-          status: data.status || "pending",
-          bookedAt: data.bookedAt || "",
-          cancellationReason: data.cancellationReason || "",
-          cancelledBy: data.cancelledBy || "",
-          cancelledByType: data.cancelledByType || "user",
-          cancelledAt: data.cancelledAt || "",
-          roomCondition: data.roomCondition || "",
-          equipmentCondition: data.equipmentCondition || "",
-          returnNotes: data.returnNotes || "",
-          returnedAt: data.returnedAt || "",
-          pictures: data.pictures || []
-        })
-      })
-      setBookingHistory(records)
+      // Update local state optimistically instead of reloading entire collection
+      setBookingHistory(prev => prev.map(b => b.id === bookingId ? { ...b, status: "approved" as const } : b))
       setSuccessMessage("อนุมัติการจองและส่งอีเมลยืนยันไปให้ผู้ใช้แล้ว")
       setTimeout(() => setSuccessMessage(null), 3000)
     } catch (error) {
@@ -246,13 +211,8 @@ export default function RoomBookingHistory() {
     }
     try {
       // Get booking data before updating
-      let bookingData: any = null
-      const bookingsSnapshot = await getDocs(collection(db, "roomBookings"))
-      bookingsSnapshot.forEach((doc) => {
-        if (doc.id === cancelModalBookingId) {
-          bookingData = doc.data()
-        }
-      })
+      const bookingDoc = await getDoc(doc(db, "roomBookings", cancelModalBookingId))
+      const bookingData = bookingDoc.exists() ? bookingDoc.data() : null
 
       await updateDoc(doc(db, "roomBookings", cancelModalBookingId), {
         status: "cancelled",
@@ -280,40 +240,15 @@ export default function RoomBookingHistory() {
         })
       }
 
-      // Refresh the bookings list
-      const q = query(collection(db, "roomBookings"), orderBy("date", "desc"))
-      const querySnapshot = await getDocs(q)
-      const records: RoomBookingRecord[] = []
-      querySnapshot.forEach((doc) => {
-        const data = doc.data()
-        records.push({
-          id: doc.id,
-          roomCode: data.roomCode || "",
-          roomName: data.roomCode || "",
-          roomType: data.roomType || "",
-          userName: data.userName || "",
-          userId: data.userId || "",
-          userEmail: data.userEmail || "",
-          date: data.date || "",
-          startTime: data.startTime || "",
-          endTime: data.endTime || "",
-          purpose: data.purpose || "",
-          status: data.status || "pending",
-          bookedAt: data.bookedAt || "",
-          people: data.people || 0,
-          members: data.members || [],
-          cancellationReason: data.cancellationReason || "",
-          cancelledBy: data.cancelledBy || "",
-          cancelledByType: data.cancelledByType || "user",
-          cancelledAt: data.cancelledAt || "",
-          roomCondition: data.roomCondition || "",
-          equipmentCondition: data.equipmentCondition || "",
-          returnNotes: data.returnNotes || "",
-          returnedAt: data.returnedAt || "",
-          pictures: data.pictures || []
-        })
-      })
-      setBookingHistory(records)
+      // Update local state optimistically instead of reloading entire collection
+      setBookingHistory(prev => prev.map(b => b.id === cancelModalBookingId ? {
+        ...b,
+        status: "cancelled" as const,
+        cancellationReason,
+        cancelledBy: "Admin",
+        cancelledByType: "admin" as const,
+        cancelledAt: new Date().toISOString()
+      } : b))
       setCancelModalOpen(false)
       setCancelModalBookingId(null)
       setCancellationReason("")
