@@ -513,6 +513,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                         src={item.picture}
                         alt={item.name}
                         className="max-h-full max-w-full object-contain rounded"
+                        loading="lazy"
                       />
                     ) : (
                       <div className="text-4xl">📦</div>

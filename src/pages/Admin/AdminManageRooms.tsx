@@ -605,6 +605,7 @@ export default function AdminManageRooms() {
                         src={room.image} 
                         alt={room.code}
                         className="w-full h-full object-cover"
+                        loading="lazy"
                       />
                     ) : (
                       <span className="text-4xl">🏢</span>
