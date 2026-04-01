@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { signOut } from "firebase/auth"
-import { collection, getDocs, query, where } from "firebase/firestore"
+import { collection, getDocs, query, where, limit } from "firebase/firestore"
 import { auth, db } from "../../firebase/firebase"
 import Header from "../../components/Header"
+import { migrateAllImagesToStorage } from "../../utils/migrateImagesToStorage"
+import type { MigrationResult } from "../../utils/migrateImagesToStorage"
 
 // Cache configuration
 interface CacheData {
@@ -50,6 +52,9 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
   const [lowStockItems, setLowStockItems] = useState<Equipment[]>([])
   const [pendingBookings, setPendingBookings] = useState<RoomBooking[]>([])
+  const [migrating, setMigrating] = useState(false)
+  const [migrationProgress, setMigrationProgress] = useState("")
+  const [migrationDone, setMigrationDone] = useState<null | { equipment: MigrationResult; equipmentMaster: MigrationResult; rooms: MigrationResult }>(null)
 
   // Load low stock items from Firestore
   useEffect(() => {
@@ -62,20 +67,29 @@ export default function AdminDashboard() {
           return
         }
 
-        const q = query(collection(db, "equipment"), where("category", "==", "consumable"))
-        const querySnapshot = await getDocs(q)
+        // Two parallel queries: out-of-stock and low-stock (avoids full collection scan)
+        const [outOfStockSnap, lowStockSnap] = await Promise.all([
+          getDocs(query(
+            collection(db, "equipment"),
+            where("category", "==", "consumable"),
+            where("quantity", "==", 0),
+            limit(100)
+          )),
+          getDocs(query(
+            collection(db, "equipment"),
+            where("category", "==", "consumable"),
+            where("quantity", ">", 0),
+            where("quantity", "<", 5),
+            limit(100)
+          ))
+        ])
+        const seen = new Set<string>()
         const items: Equipment[] = []
-        querySnapshot.forEach((doc) => {
+        ;[...outOfStockSnap.docs, ...lowStockSnap.docs].forEach((doc) => {
+          if (seen.has(doc.id)) return
+          seen.add(doc.id)
           const data = doc.data()
-          if (data.quantity <= 4) {  // Low stock threshold: 4 or less
-            items.push({
-              id: doc.id,
-              name: data.name,
-              category: data.category,
-              quantity: data.quantity,
-              unit: data.unit || "ชิ้น"
-            })
-          }
+          items.push({ id: doc.id, name: data.name, category: data.category, quantity: data.quantity, unit: data.unit || "ชิ้น" })
         })
         
         // Cache the results
@@ -132,6 +146,24 @@ export default function AdminDashboard() {
       navigate('/login')
     } catch (error) {
       console.error('Error logging out:', error)
+    }
+  }
+
+  const handleMigrateImages = async () => {
+    if (!window.confirm('ย้ายรูปภาพทั้งหมดไปยัง Firebase Storage?\n(ทำครั้งเดียวเท่านั้น หลังจากทำแล้วหน้าเว็บจะโหลดเร็วขึ้นมาก)')) return
+    setMigrating(true)
+    setMigrationDone(null)
+    try {
+      const results = await migrateAllImagesToStorage((col, current, total, _id) => {
+        setMigrationProgress(`${col}: ${current}/${total}`)
+      })
+      setMigrationDone(results)
+    } catch (err) {
+      console.error('Migration error:', err)
+      alert('เกิดข้อผิดพลาดในการย้ายรูปภาพ ดูรายละเอียดใน Console')
+    } finally {
+      setMigrating(false)
+      setMigrationProgress("")
     }
   }
 
@@ -377,6 +409,42 @@ export default function AdminDashboard() {
               จัดการผู้ใช้งาน
             </button>
           </div>
+
+          {/* Image Migration Tool */}
+          <button
+            onClick={handleMigrateImages}
+            disabled={migrating}
+            className="
+              w-full
+              mt-6
+              py-3
+              rounded-full
+              border border-gray-400
+              text-gray-700
+              text-sm font-medium
+              hover:bg-gray-100
+              transition
+              disabled:opacity-50
+            "
+          >
+            {migrating ? `⏳ กำลังย้ายรูปภาพ... ${migrationProgress}` : '🖼️ ย้ายรูปภาพไปยัง Storage (ทำ 1 ครั้ง)'}
+          </button>
+
+          {/* Migration result */}
+          {migrationDone && (
+            <div className="w-full mt-4 bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800">
+              <p className="font-semibold mb-1">✅ ย้ายรูปภาพสำเร็จ!</p>
+              {(['equipment', 'equipmentMaster', 'rooms'] as const).map((col) => {
+                const r = migrationDone[col]
+                return (
+                  <p key={col} className="text-xs">
+                    {col}: ย้าย {r.migrated} | ข้าม {r.skipped} | ผิดพลาด {r.failed}
+                    {r.errors.length > 0 && <span className="text-red-600"> ({r.errors.join(', ')})</span>}
+                  </p>
+                )
+              })}
+            </div>
+          )}
 
           {/* Logout Button */}
           <button

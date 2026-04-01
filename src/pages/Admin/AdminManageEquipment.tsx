@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, writeBatch, query, where, limit } from "firebase/firestore"
 import { db } from "../../firebase/firebase"
@@ -218,35 +218,23 @@ export default function AdminManageEquipment() {
     { key: "lowStock", label: "สต๊อกไม่เพียงพอ" },
   ] as const
 
-  // Group equipment by name for assets, keep consumables separate
-  const getGroupedEquipment = () => {
+  // Group equipment by name — memoized to avoid recalculating on every render
+  const groupedEquipment = useMemo(() => {
     const grouped: { [key: string]: Equipment[] } = {}
-    
     equipment.forEach((item) => {
-      if (!grouped[item.name]) {
-        grouped[item.name] = []
-      }
+      if (!grouped[item.name]) grouped[item.name] = []
       grouped[item.name].push(item)
     })
-    
     return Object.entries(grouped).map(([_name, items]) => {
       if (items[0].category === "asset") {
-        // For assets, use quantity from loadAllEquipment (already counts instances correctly)
-        return {
-          ...items[0],
-          quantity: items[0].quantity, // Use the quantity from loadAllEquipment, not items.length
-          allIds: items[0].allIds || [] // Use the instance IDs from loadAllEquipment
-        }
+        return { ...items[0], quantity: items[0].quantity, allIds: items[0].allIds || [] }
       }
-      // For consumables, return each separately
       return items.length === 1 ? { ...items[0], allIds: [items[0].id] } : { ...items[0], allIds: items.map(i => i.id) }
     }).flat()
-  }
+  }, [equipment])
 
-  const groupedEquipment = getGroupedEquipment()
-
-  // Get unique equipment types from all equipment
-  const getUniqueEquipmentTypes = () => {
+  // Get unique equipment types — memoized
+  const uniqueEquipmentTypes = useMemo(() => {
     const types = new Set<string>()
     groupedEquipment.forEach((item: any) => {
       if (item.equipmentTypes && Array.isArray(item.equipmentTypes)) {
@@ -254,34 +242,23 @@ export default function AdminManageEquipment() {
       }
     })
     return Array.from(types).sort()
-  }
+  }, [groupedEquipment])
 
-  const uniqueEquipmentTypes = getUniqueEquipmentTypes()
-
-  const filteredEquipment = groupedEquipment.filter((item: any) => {
+  // Filter equipment — memoized
+  const filteredEquipment = useMemo(() => groupedEquipment.filter((item: any) => {
     const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = selectedCategory === "all" || item.category === selectedCategory
-    
-    // Filter by equipment type
-    const matchesEquipmentType = selectedEquipmentType === "all" || 
+    const matchesEquipmentType = selectedEquipmentType === "all" ||
       (item.equipmentTypes && Array.isArray(item.equipmentTypes) && item.equipmentTypes.includes(selectedEquipmentType))
-
-    // Filter by equipment subtype
     const matchesEquipmentSubType = selectedEquipmentSubType === "all" ||
       (item.equipmentSubTypes && Array.isArray(item.equipmentSubTypes) && item.equipmentSubTypes.includes(selectedEquipmentSubType))
-    
-    // Filter by stock status (only for consumables)
     let matchesStockStatus = true
     if (selectedStockStatus !== "all") {
-      if (selectedStockStatus === "outOfStock") {
-        matchesStockStatus = item.quantity === 0
-      } else if (selectedStockStatus === "lowStock") {
-        matchesStockStatus = item.quantity > 0 && item.quantity < LOW_STOCK_THRESHOLD
-      }
+      if (selectedStockStatus === "outOfStock") matchesStockStatus = item.quantity === 0
+      else if (selectedStockStatus === "lowStock") matchesStockStatus = item.quantity > 0 && item.quantity < LOW_STOCK_THRESHOLD
     }
-    
     return matchesSearch && matchesCategory && matchesStockStatus && matchesEquipmentType && matchesEquipmentSubType
-  })
+  }), [groupedEquipment, searchTerm, selectedCategory, selectedEquipmentType, selectedEquipmentSubType, selectedStockStatus])
 
   const handleAddEquipment = () => {
     setAddEquipmentForm({
@@ -1386,6 +1363,7 @@ export default function AdminManageEquipment() {
                         src={item.picture}
                         alt={item.name}
                         className="w-full h-32 object-cover"
+                        loading="lazy"
                       />
                     </div>
                   )}
