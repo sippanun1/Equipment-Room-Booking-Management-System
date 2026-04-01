@@ -173,18 +173,49 @@ export default function AdminManageEquipment() {
   const [addSubTypeInput, setAddSubTypeInput] = useState("")
   const [equipment, setEquipment] = useState<Equipment[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadingAssets, setLoadingAssets] = useState(false)
+  const [loadingAssetsError, setLoadingAssetsError] = useState(false)
 
-  // Load equipment from Firestore
+  // Load equipment from Firestore — two-phase: consumables first, then full load
   const loadEquipment = async (skipCache = false) => {
     try {
-      const equipmentList = await loadAllEquipment(!skipCache)
-      setEquipment(equipmentList as Equipment[])
-      return equipmentList
+      // Phase 1: Show consumables immediately (fast — single collection)
+      const quickSnap = await getDocs(collection(db, 'equipment'))
+      const quickItems: Equipment[] = []
+      quickSnap.forEach((docSnap) => {
+        const data = docSnap.data()
+        if (data.category === 'consumable' || data.category === 'main') {
+          quickItems.push({
+            id: docSnap.id, name: data.name, category: data.category,
+            quantity: data.quantity ?? 0, unit: data.unit || 'ชิ้น',
+            equipmentTypes: data.equipmentTypes || [],
+            equipmentSubTypes: data.equipmentSubTypes || [],
+            picture: data.picture, allIds: [docSnap.id],
+            sourceCollection: 'equipment'
+          })
+        }
+      })
+      setEquipment(quickItems as Equipment[])
+      setLoading(false)
+      setLoadingAssets(true)
+      setLoadingAssetsError(false)
+
+      // Phase 2: Full load including assets (equipmentMaster + assetInstances)
+      try {
+        const equipmentList = await loadAllEquipment(!skipCache)
+        setEquipment(equipmentList as Equipment[])
+        return equipmentList
+      } catch (phase2Error) {
+        console.error("Error loading assets (phase 2):", phase2Error)
+        setLoadingAssetsError(true)
+        return quickItems
+      }
     } catch (error) {
       console.error("Error loading equipment:", error)
       return []
     } finally {
       setLoading(false)
+      setLoadingAssets(false)
     }
   }
 
@@ -254,8 +285,21 @@ export default function AdminManageEquipment() {
       (item.equipmentSubTypes && Array.isArray(item.equipmentSubTypes) && item.equipmentSubTypes.includes(selectedEquipmentSubType))
     let matchesStockStatus = true
     if (selectedStockStatus !== "all") {
-      if (selectedStockStatus === "outOfStock") matchesStockStatus = item.quantity === 0
-      else if (selectedStockStatus === "lowStock") matchesStockStatus = item.quantity > 0 && item.quantity < LOW_STOCK_THRESHOLD
+      if (selectedStockStatus === "outOfStock") {
+        if (item.category === 'asset') {
+          // Asset is out of stock when no units are available to borrow (all borrowed or 0 total)
+          matchesStockStatus = item.availableCount !== undefined ? item.availableCount === 0 : item.quantity === 0
+        } else {
+          matchesStockStatus = item.quantity === 0
+        }
+      } else if (selectedStockStatus === "lowStock") {
+        if (item.category === 'asset') {
+          // Asset is low stock when some (not all) units are borrowed
+          matchesStockStatus = item.availableCount !== undefined && item.availableCount > 0 && item.availableCount < item.quantity
+        } else {
+          matchesStockStatus = item.quantity > 0 && item.quantity < LOW_STOCK_THRESHOLD
+        }
+      }
     }
     return matchesSearch && matchesCategory && matchesStockStatus && matchesEquipmentType && matchesEquipmentSubType
   }), [groupedEquipment, searchTerm, selectedCategory, selectedEquipmentType, selectedEquipmentSubType, selectedStockStatus])
@@ -1101,7 +1145,7 @@ export default function AdminManageEquipment() {
         min-h-screen
         bg-white
         bg-[radial-gradient(#dbeafe_1px,transparent_1px)]
-        bg-[length:18px_18px]
+        bg-size-[18px_18px]
       "
     >
       {/* ===== HEADER ===== */}
@@ -1109,7 +1153,7 @@ export default function AdminManageEquipment() {
 
       {/* ===== CONTENT ===== */}
       <div className="mt-6 flex justify-center">
-        <div className="w-full max-w-[360px] px-4 flex flex-col items-center pb-6">
+        <div className="w-full max-w-90 px-4 flex flex-col items-center pb-6">
           {/* Back Button and Add Equipment Button */}
           <div className="w-full flex gap-3 mt-6 mb-6">
             <button
@@ -1345,8 +1389,25 @@ export default function AdminManageEquipment() {
               <div className="text-center py-8">
                 <p className="text-gray-500">กำลังโหลดข้อมูล...</p>
               </div>
-            ) : filteredEquipment.length > 0 ? (
+            ) : (
+              <>
+                {loadingAssets && (
+                  <div className="w-full flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-600">
+                    <span className="animate-spin">⏳</span>
+                    <span>กำลังโหลดครุภัณฑ์...</span>
+                  </div>
+                )}
+                {loadingAssetsError && (
+                  <div className="w-full flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+                    <span>⚠️ โหลดครุภัณฑ์ไม่สำเร็จ — แสดงเฉพาะวัสดุสิ้นเปลือง</span>
+                    <button onClick={() => loadEquipment(true)} className="ml-auto underline">ลองใหม่</button>
+                  </div>
+                )}
+              </>
+            )}
+            {!loading && filteredEquipment.length > 0 ? (
               filteredEquipment.map((item: any) => (
+
                 <div
                   key={item.name}
                   className="
@@ -1404,6 +1465,11 @@ export default function AdminManageEquipment() {
                         )}
                       </>
                     )}
+                    {item.category === "asset" && item.availableCount !== undefined && item.quantity > 0 && item.availableCount === 0 && (
+                      <span className="ml-2 px-2 py-1 bg-red-700 text-white text-xs font-semibold rounded">
+                        ถูกยืมทั้งหมด
+                      </span>
+                    )}
                   </div>
 
                   {/* Action Buttons */}
@@ -1441,11 +1507,11 @@ export default function AdminManageEquipment() {
                   </div>
                 </div>
               ))
-            ) : (
+            ) : !loadingAssets ? (
               <div className="w-full text-center text-gray-500 py-8">
                 ไม่พบอุปกรณ์ที่ค้นหา
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
@@ -2324,7 +2390,7 @@ export default function AdminManageEquipment() {
 
       {/* ===== ASSET CODE DELETE CONFIRMATION MODAL ===== */}
       {showAssetCodeDeleteConfirm && (
-        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-[60] px-4">
+        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-60 px-4">
           <div className="bg-white rounded-lg overflow-hidden w-full max-w-md">
             <div className="bg-red-500 text-white p-4 text-center font-semibold">
               ยืนยันการลบรหัสอุปกรณ์
@@ -2363,7 +2429,7 @@ export default function AdminManageEquipment() {
 
       {/* ===== ASSET DELETE ALL CONFIRMATION MODAL ===== */}
       {showAssetDeleteAllConfirm && (
-        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-[60] px-4">
+        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-60 px-4">
           <div className="bg-white rounded-lg overflow-hidden w-full max-w-md">
             <div className="bg-red-500 text-white p-4 text-center font-semibold">
               ยืนยันการลบครุภัณฑ์ทั้งหมด
@@ -2748,7 +2814,7 @@ export default function AdminManageEquipment() {
 
       {/* ===== ADD EQUIPMENT TYPE MODAL ===== */}
       {showAddTypeModal && (
-        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-[60] px-4">
+        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-60 px-4">
           <div className="bg-white rounded-lg overflow-hidden w-full max-w-md max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="bg-orange-500 text-white p-4 text-center font-semibold sticky top-0">
@@ -2850,7 +2916,7 @@ export default function AdminManageEquipment() {
 
       {/* Manage Types Modal */}
       {showManageTypesModal && (
-        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-[60] px-4">
+        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-60 px-4">
           <div className="bg-white rounded-lg overflow-hidden w-full max-w-md max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="bg-blue-500 text-white p-4 text-center font-semibold sticky top-0">
@@ -2987,7 +3053,7 @@ export default function AdminManageEquipment() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteTypeConfirm && (
-        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-[70] px-4">
+        <div className="fixed inset-0 backdrop-blur-xs bg-opacity-50 flex items-center justify-center z-70 px-4">
           <div className="bg-white rounded-lg overflow-hidden w-full max-w-xs">
             {/* Modal Header */}
             <div className="bg-red-500 text-white p-4 text-center font-semibold">

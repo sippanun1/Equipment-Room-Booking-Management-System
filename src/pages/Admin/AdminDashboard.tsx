@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { signOut } from "firebase/auth"
-import { collection, getDocs, query, where, limit } from "firebase/firestore"
+import { collection, getDocs, query, where } from "firebase/firestore"
 import { auth, db } from "../../firebase/firebase"
 import Header from "../../components/Header"
 import { migrateAllImagesToStorage } from "../../utils/migrateImagesToStorage"
@@ -13,10 +13,10 @@ interface CacheData {
   timestamp: number
 }
 
-const dashboardCache: { lowStock?: CacheData; pendingBookings?: CacheData } = {}
+const dashboardCache: { lowStock?: CacheData; pendingBookings?: CacheData; outOfStockAssets?: CacheData } = {}
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
-const getCachedData = (key: 'lowStock' | 'pendingBookings'): any => {
+const getCachedData = (key: 'lowStock' | 'pendingBookings' | 'outOfStockAssets'): any => {
   const cached = dashboardCache[key]
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     console.log(`Using cached ${key}`)
@@ -25,7 +25,7 @@ const getCachedData = (key: 'lowStock' | 'pendingBookings'): any => {
   return null
 }
 
-const setCachedData = (key: 'lowStock' | 'pendingBookings', data: any) => {
+const setCachedData = (key: 'lowStock' | 'pendingBookings' | 'outOfStockAssets', data: any) => {
   dashboardCache[key] = { data, timestamp: Date.now() }
 }
 
@@ -51,6 +51,7 @@ interface RoomBooking {
 export default function AdminDashboard() {
   const navigate = useNavigate()
   const [lowStockItems, setLowStockItems] = useState<Equipment[]>([])
+  const [outOfStockAssets, setOutOfStockAssets] = useState<{ id: string; name: string }[]>([])
   const [pendingBookings, setPendingBookings] = useState<RoomBooking[]>([])
   const [migrating, setMigrating] = useState(false)
   const [migrationProgress, setMigrationProgress] = useState("")
@@ -67,34 +68,41 @@ export default function AdminDashboard() {
           return
         }
 
-        // Two parallel queries: out-of-stock and low-stock (avoids full collection scan)
-        const [outOfStockSnap, lowStockSnap] = await Promise.all([
-          getDocs(query(
-            collection(db, "equipment"),
-            where("category", "==", "consumable"),
-            where("quantity", "==", 0),
-            limit(100)
-          )),
-          getDocs(query(
-            collection(db, "equipment"),
-            where("category", "==", "consumable"),
-            where("quantity", ">", 0),
-            where("quantity", "<", 5),
-            limit(100)
-          ))
-        ])
-        const seen = new Set<string>()
+        // Single query for all consumables, filter client-side (compound queries need composite indexes)
+        const LOW_STOCK_THRESHOLD = 10
+        const consumablesSnap = await getDocs(query(
+          collection(db, "equipment"),
+          where("category", "==", "consumable")
+        ))
         const items: Equipment[] = []
-        ;[...outOfStockSnap.docs, ...lowStockSnap.docs].forEach((doc) => {
-          if (seen.has(doc.id)) return
-          seen.add(doc.id)
+        consumablesSnap.forEach((doc) => {
           const data = doc.data()
-          items.push({ id: doc.id, name: data.name, category: data.category, quantity: data.quantity, unit: data.unit || "ชิ้น" })
+          if ((data.quantity ?? 0) < LOW_STOCK_THRESHOLD) {
+            items.push({ id: doc.id, name: data.name, category: data.category, quantity: data.quantity ?? 0, unit: data.unit || "ชิ้น" })
+          }
         })
         
         // Cache the results
         setCachedData('lowStock', items)
         setLowStockItems(items)
+
+        // Also check equipmentMaster for assets where available === 0 (all units borrowed)
+        const cachedAssets = getCachedData('outOfStockAssets')
+        if (cachedAssets) {
+          setOutOfStockAssets(cachedAssets)
+        } else {
+          const masterSnap = await getDocs(collection(db, "equipmentMaster"))
+          const outAssets: { id: string; name: string }[] = []
+          masterSnap.forEach((doc) => {
+            const data = doc.data()
+            // available === 0 means all units are borrowed, quantity > 0 means units exist
+            if ((data.available ?? -1) === 0 && (data.quantity ?? 0) > 0) {
+              outAssets.push({ id: doc.id, name: data.name })
+            }
+          })
+          setCachedData('outOfStockAssets', outAssets)
+          setOutOfStockAssets(outAssets)
+        }
       } catch (error) {
         console.error("Error loading low stock items:", error)
       }
@@ -173,7 +181,7 @@ export default function AdminDashboard() {
         min-h-screen
         bg-white
         bg-[radial-gradient(#dbeafe_1px,transparent_1px)]
-        bg-[length:18px_18px]
+        bg-size-[18px_18px]
       "
     >
       {/* ===== HEADER ===== */}
@@ -181,7 +189,7 @@ export default function AdminDashboard() {
 
       {/* ===== CONTENT ===== */}
       <div className="mt-8 flex justify-center">
-        <div className="w-full max-w-[360px] px-4 flex flex-col items-center">
+        <div className="w-full max-w-90 px-4 flex flex-col items-center">
           {/* Room Booking Alert */}
           {pendingBookings.length > 0 && (
             <div className="w-full mb-6 bg-amber-50 rounded-lg p-4 border border-amber-200">
@@ -201,20 +209,21 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* Low Stock Alert */}
-          {lowStockItems.length > 0 && (
+          {/* Low Stock / Out-of-Stock Alert */}
+          {(lowStockItems.length > 0 || outOfStockAssets.length > 0) && (
             <div className="w-full mb-8 bg-red-50 rounded-lg p-4 border border-red-200">
               <h3 className="text-sm font-semibold text-red-800 mb-3">⚠️ สต๊อกอุปกรณ์ไม่เพียงพอ</h3>
-              <div className="flex flex-col gap-3 mb-4">
-                {(() => {
-                  const outOfStockCount = lowStockItems.filter(item => item.quantity === 0).length
-                  const lowStockCount = lowStockItems.filter(item => item.quantity > 0).length
-                  
-                  return (
-                    <>
-                      {outOfStockCount > 0 && (
+              {(() => {
+                const outOfStockConsumableCount = lowStockItems.filter(item => item.quantity === 0).length
+                const lowStockCount = lowStockItems.filter(item => item.quantity > 0).length
+                const outOfStockAssetCount = outOfStockAssets.length
+                const totalOutOfStock = outOfStockConsumableCount + outOfStockAssetCount
+                return (
+                  <>
+                    <div className="flex flex-col gap-2 mb-4">
+                      {totalOutOfStock > 0 && (
                         <div className="text-sm text-gray-700">
-                          <span className="font-semibold text-red-700">{outOfStockCount} รายการ</span>
+                          <span className="font-semibold text-red-700">{totalOutOfStock} รายการ</span>
                           <span> หมดสต๊อก</span>
                         </div>
                       )}
@@ -224,48 +233,26 @@ export default function AdminDashboard() {
                           <span> สต๊อกใกล้หมด</span>
                         </div>
                       )}
-                    </>
-                  )
-                })()}
-              </div>
-              {(() => {
-                const outOfStockCount = lowStockItems.filter(item => item.quantity === 0).length
-                const lowStockCount = lowStockItems.filter(item => item.quantity > 0).length
-                if (outOfStockCount > 0 && lowStockCount > 0) {
-                  return (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => navigate('/admin/manage-equipment', { state: { stockFilter: 'outOfStock' } })}
-                        className="flex-1 py-2 bg-red-700 text-white text-sm font-semibold rounded-full hover:bg-red-800 transition"
-                      >
-                        หมดสต๊อก ({outOfStockCount})
-                      </button>
-                      <button
-                        onClick={() => navigate('/admin/manage-equipment', { state: { stockFilter: 'lowStock' } })}
-                        className="flex-1 py-2 bg-red-500 text-white text-sm font-semibold rounded-full hover:bg-red-600 transition"
-                      >
-                        สต๊อกใกล้หมด ({lowStockCount})
-                      </button>
                     </div>
-                  )
-                }
-                if (outOfStockCount > 0) {
-                  return (
-                    <button
-                      onClick={() => navigate('/admin/manage-equipment', { state: { stockFilter: 'outOfStock' } })}
-                      className="w-full py-2 bg-orange-500 text-white text-sm font-semibold rounded-full hover:bg-orange-600 transition"
-                    >
-                      ดูรายการหมดสต๊อก
-                    </button>
-                  )
-                }
-                return (
-                  <button
-                    onClick={() => navigate('/admin/manage-equipment', { state: { stockFilter: 'lowStock' } })}
-                    className="w-full py-2 bg-orange-500 text-white text-sm font-semibold rounded-full hover:bg-orange-600 transition"
-                  >
-                    ดูรายการสต๊อกน้อย
-                  </button>
+                    <div className="flex flex-col gap-2">
+                      {totalOutOfStock > 0 && (
+                        <button
+                          onClick={() => navigate('/admin/manage-equipment', { state: { stockFilter: 'outOfStock' } })}
+                          className="w-full py-2 bg-red-700 text-white text-sm font-semibold rounded-full hover:bg-red-800 transition"
+                        >
+                          ดูรายการหมดสต๊อก ({totalOutOfStock})
+                        </button>
+                      )}
+                      {lowStockCount > 0 && (
+                        <button
+                          onClick={() => navigate('/admin/manage-equipment', { state: { stockFilter: 'lowStock' } })}
+                          className="w-full py-2 bg-red-500 text-white text-sm font-semibold rounded-full hover:bg-red-600 transition"
+                        >
+                          ดูรายการสต๊อกน้อย ({lowStockCount})
+                        </button>
+                      )}
+                    </div>
+                  </>
                 )
               })()}
             </div>
