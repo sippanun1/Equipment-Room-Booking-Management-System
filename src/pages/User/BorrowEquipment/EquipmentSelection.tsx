@@ -89,17 +89,17 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   useEffect(() => {
     const loadEquipment = async () => {
       try {
-        // Load custom equipment types
-        const typesSnapshot = await getDocs(collection(db, "equipmentTypes"))
+        // Phase 1: fetch equipment types AND consumables in parallel (no sequential wait)
+        const [typesSnapshot, quickSnap] = await Promise.all([
+          getDocs(collection(db, "equipmentTypes")),
+          getDocs(collection(db, "equipment"))
+        ])
         const customTypes: { [key: string]: string[] } = { ...defaultEquipmentTypes }
         typesSnapshot.forEach((doc) => {
           const data = doc.data()
           customTypes[data.name] = data.subtypes || []
         })
         setEquipmentTypes(customTypes)
-
-        // Phase 1: Load consumables fast from equipment collection directly
-        const quickSnap = await getDocs(collection(db, "equipment"))
         const quickItems: Equipment[] = []
         quickSnap.forEach((docSnap) => {
           const data = docSnap.data()
@@ -123,22 +123,49 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
         // Phase 2: Full load including assets
         try {
           const allEquipment = await loadAllEquipment()
-          const availableEquipment = allEquipment
-            .filter(item => {
-              if (item.category === "consumable") return item.quantity > 0
-              const availCount = item.availableCount !== undefined ? item.availableCount : item.quantity
-              return availCount > 0
-            })
-            .map(item => {
-              const displayAvailable = item.category === "asset" && item.availableCount !== undefined ? item.availableCount : item.quantity
-              return {
-                id: item.id, name: item.name, category: item.category,
-                quantity: item.quantity, availableCount: item.availableCount,
-                unit: item.unit, picture: item.picture,
-                inStock: displayAvailable > 0, available: displayAvailable,
-                equipmentTypes: item.equipmentTypes, equipmentSubTypes: item.equipmentSubTypes
-              }
-            })
+          
+          // Step 1: Filter out unavailable items
+          const filtered = allEquipment.filter(item => {
+            if (item.category === "consumable" || item.category === "main") {
+              return (item.quantity ?? 0) > 0
+            }
+            if (item.category === "asset") {
+              // Must have at least one instance AND at least one available
+              if ((item.quantity ?? 0) === 0) return false
+              return item.availableCount !== undefined
+                ? item.availableCount > 0
+                : (item.quantity ?? 0) > 0
+            }
+            return false
+          })
+
+          // Step 2: Deduplicate by name — combine available counts and allIds
+          // (handles case where two equipmentMaster docs have the same name)
+          const nameMap = new Map<string, typeof filtered[0]>()
+          filtered.forEach(item => {
+            const existing = nameMap.get(item.name)
+            if (existing) {
+              existing.availableCount = (existing.availableCount ?? 0) + (item.availableCount ?? 0)
+              existing.quantity += item.quantity
+              existing.allIds = [...(existing.allIds ?? []), ...(item.allIds ?? [])]
+            } else {
+              nameMap.set(item.name, { ...item, allIds: [...(item.allIds ?? [])] })
+            }
+          })
+
+          const availableEquipment = Array.from(nameMap.values()).map(item => {
+            const displayAvailable =
+              item.category === "asset" && item.availableCount !== undefined
+                ? item.availableCount
+                : item.quantity
+            return {
+              id: item.id, name: item.name, category: item.category,
+              quantity: item.quantity, availableCount: item.availableCount,
+              unit: item.unit, picture: item.picture,
+              inStock: displayAvailable > 0, available: displayAvailable,
+              equipmentTypes: item.equipmentTypes, equipmentSubTypes: item.equipmentSubTypes
+            }
+          })
           setEquipmentData(availableEquipment)
           setFilteredEquipment(availableEquipment)
         } catch (phase2Error) {
@@ -555,7 +582,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                     {item.equipmentTypes?.length ? (
                       <>
                         {item.equipmentTypes.join(", ")}
-                        {item.equipmentSubTypes?.length && ` (${item.equipmentSubTypes.join(", ")})`}
+                        {(item.equipmentSubTypes?.length ?? 0) > 0 && ` (${item.equipmentSubTypes!.join(", ")})`}
                       </>
                     ) : (
                       "ไม่ระบุประเภท"
