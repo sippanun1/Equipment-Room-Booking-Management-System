@@ -257,6 +257,50 @@ export async function syncMasterAvailableCount(masterId: string): Promise<boolea
 }
 
 /**
+ * Batch sync available counts for multiple masters (optimized for high concurrency)
+ * Replaces sequential loop of syncMasterAvailableCount() calls
+ * Loads all instances in parallel, updates all masters in single batch
+ */
+export async function syncMasterAvailableCountBatch(masterIds: string[]): Promise<boolean> {
+  if (!masterIds || masterIds.length === 0) return true
+
+  try {
+    // Fetch all instances for all masters in parallel
+    const instancePromises = masterIds.map(masterId =>
+      getDocs(query(
+        collection(db, 'assetInstances'),
+        where('equipmentId', '==', masterId)
+      ))
+    )
+    const allInstancesSnapshots = await Promise.all(instancePromises)
+
+    // Prepare batch update with all masters
+    const batch = writeBatch(db)
+    
+    masterIds.forEach((masterId, idx) => {
+      const instances = allInstancesSnapshots[idx].docs.map(doc => doc.data())
+      const availableCount = instances.filter(inst => inst.available).length
+      const totalCount = instances.length
+      
+      batch.update(doc(db, 'equipmentMaster', masterId), {
+        available: availableCount,
+        quantity: totalCount
+      })
+    })
+
+    // Single batch commit for all updates
+    await batch.commit()
+
+    // Invalidate cache once (instead of per master)
+    invalidateEquipmentCache()
+    return true
+  } catch (error) {
+    console.error('Error batch syncing available counts:', error)
+    return false
+  }
+}
+
+/**
  * Add new asset equipment (creates master + instances)
  */
 export async function addNewAsset(

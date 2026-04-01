@@ -3,7 +3,7 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../../../hooks/useAuth"
 import { logReturnTransaction } from "../../../utils/borrowReturnLogger"
-import { syncMasterAvailableCount } from "../../../utils/equipmentHelper"
+import { syncMasterAvailableCountBatch } from "../../../utils/equipmentHelper"
 import type { ReturnEquipmentItem } from "../../../App"
 
 interface ReturnSummaryProps {
@@ -362,10 +362,11 @@ export default function ReturnSummary({ returnEquipment, setReturnEquipment }: R
                         returnedItems
                       )
 
-                      // Sync master available counts for returned assets
+                      // Sync master available counts for returned assets (batch in parallel for speed)
                       const assetItems = returnedItems.filter(item => item.equipmentCategory === "asset")
-                      for (const item of assetItems) {
-                        await syncMasterAvailableCount(item.equipmentId)
+                      const assetMasterIds = assetItems.map(item => item.equipmentId)
+                      if (assetMasterIds.length > 0) {
+                        await syncMasterAvailableCountBatch(assetMasterIds)
                       }
                     }
 

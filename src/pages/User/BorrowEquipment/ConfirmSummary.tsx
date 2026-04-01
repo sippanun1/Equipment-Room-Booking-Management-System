@@ -5,7 +5,7 @@ import { db } from "../../../firebase/firebase"
 import Header from "../../../components/Header"
 import { useAuth } from "../../../hooks/useAuth"
 import { logBorrowTransaction } from "../../../utils/borrowReturnLogger"
-import { getAvailableAssetInstances, markAssetInstancesAsBorrowed, invalidateEquipmentCache, loadAllEquipment, syncMasterAvailableCount } from "../../../utils/equipmentHelper"
+import { getAvailableAssetInstances, markAssetInstancesAsBorrowed, invalidateEquipmentCache, loadAllEquipment, syncMasterAvailableCountBatch } from "../../../utils/equipmentHelper"
 import type { SelectedEquipment } from "../../../App"
 
 interface ConfirmSummaryProps {
@@ -215,15 +215,20 @@ export default function ConfirmSummary({ cartItems }: ConfirmSummaryProps) {
       await batch.commit()
 
       // For assets: mark borrowed instances as unavailable using new helper
+      const assetMasterIds: string[] = []
       for (const item of cartItems) {
         if (item.category === "asset") {
           const selectedCodes = assetCodesMap.get(item.id)?.filter(c => c.selected) || []
           const selectedInstanceIds = selectedCodes.map(c => c.equipmentId)
           
           await markAssetInstancesAsBorrowed(selectedInstanceIds)
-          // Sync master available count to ensure inventory is consistent
-          await syncMasterAvailableCount(item.id)
+          assetMasterIds.push(item.id)
         }
+      }
+      
+      // Batch sync all master available counts at once (much faster than sequential calls)
+      if (assetMasterIds.length > 0) {
+        await syncMasterAvailableCountBatch(assetMasterIds)
       }
 
       // Clear equipment cache so next borrow shows updated quantities

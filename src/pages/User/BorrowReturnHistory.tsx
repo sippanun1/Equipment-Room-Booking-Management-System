@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import Header from "../../components/Header"
-import { collection, getDocs, query, orderBy, where } from "firebase/firestore"
+import { collection, getDocs, query, orderBy, where, limit, startAfter, QueryDocumentSnapshot, DocumentData } from "firebase/firestore"
 import { db } from "../../firebase/firebase"
 import { useAuth } from "../../hooks/useAuth"
 import type { BorrowTransaction } from "../../utils/borrowReturnLogger"
+
+const ITEMS_PER_PAGE = 20  // Load 20 items at a time instead of all
 
 export default function BorrowReturnHistory() {
   const navigate = useNavigate()
@@ -15,6 +17,9 @@ export default function BorrowReturnHistory() {
   const [searchTerm, setSearchTerm] = useState("")
   const [detailsModal, setDetailsModal] = useState<BorrowTransaction | null>(null)
   const [showNotifications, setShowNotifications] = useState(true)
+  const [pageIndex, setPageIndex] = useState(0)
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null)
+  const [hasMore, setHasMore] = useState(true)
 
   useEffect(() => {
     // Prevent scrolling when modal is open
@@ -38,25 +43,58 @@ export default function BorrowReturnHistory() {
 
       try {
         setLoading(true)
-        // Query only the current user's borrow history
-        const borrowHistoryQuery = query(
-          collection(db, "borrowHistory"),
+        
+        // Build query with pagination: load one extra to know if there are more pages
+        let queryConstraints: any[] = [
           where("userId", "==", user.uid),
-          orderBy("timestamp", "desc")
-        )
+          orderBy("timestamp", "desc"),
+          limit(ITEMS_PER_PAGE + 1)  // Load one extra to detect if more exist
+        ]
+        
+        // For subsequent pages, start after the last visible document
+        if (pageIndex > 0 && lastVisible) {
+          queryConstraints.push(startAfter(lastVisible))
+        }
+        
+        const borrowHistoryQuery = query(collection(db, "borrowHistory"), ...queryConstraints)
         const snapshot = await getDocs(borrowHistoryQuery)
-        const txns = snapshot.docs.map((doc) => doc.data() as BorrowTransaction)
+        const docs = snapshot.docs
+        
+        // Check if there are more pages
+        if (docs.length > ITEMS_PER_PAGE) {
+          setHasMore(true)
+          docs.pop()  // Remove the extra document
+        } else {
+          setHasMore(false)
+        }
+        
+        // Save the last visible document for next pagination
+        if (docs.length > 0) {
+          setLastVisible(docs[docs.length - 1])
+        }
+        
+        const txns = docs.map((doc) => doc.data() as BorrowTransaction)
         setTransactions(txns)
       } catch (error) {
         console.error("Error fetching borrow history:", error)
-        // Fallback: filter client-side if index not ready
+        // Fallback: filter client-side if index not ready (but with pagination)
         try {
           const fallbackQuery = query(
             collection(db, "borrowHistory"),
-            orderBy("timestamp", "desc")
+            orderBy("timestamp", "desc"),
+            limit(ITEMS_PER_PAGE + 1)
           )
           const snapshot = await getDocs(fallbackQuery)
-          const allTxns = snapshot.docs.map((doc) => doc.data() as BorrowTransaction)
+          const allDocs = snapshot.docs
+          
+          if (allDocs.length > ITEMS_PER_PAGE) {
+            setHasMore(true)
+            allDocs.pop()
+          } else {
+            setHasMore(false)
+          }
+          
+          const allTxns = allDocs.map((doc) => doc.data() as BorrowTransaction)
           // Filter by userId or userEmail
           const userTxns = allTxns.filter(
             (txn) => txn.userId === user.uid || txn.userEmail === user.email
@@ -71,7 +109,7 @@ export default function BorrowReturnHistory() {
     }
 
     fetchTransactions()
-  }, [user])
+  }, [user, pageIndex, lastVisible])
 
   const filteredTransactions = transactions.filter((txn) => {
     const matchesStatus = filter === "all" || txn.status === filter
@@ -160,7 +198,7 @@ export default function BorrowReturnHistory() {
         min-h-screen
         bg-white
         bg-[radial-gradient(#dbeafe_1px,transparent_1px)]
-        bg-[length:18px_18px]
+        bg-size-[18px_18px]
       "
     >
       {/* ===== HEADER ===== */}
@@ -168,7 +206,7 @@ export default function BorrowReturnHistory() {
 
       {/* ===== CONTENT ===== */}
       <div className="mt-6 flex justify-center">
-        <div className="w-full max-w-[360px] px-4 flex flex-col items-center pb-6">
+        <div className="w-full max-w-90 px-4 flex flex-col items-center pb-6">
           {/* Back Button */}
           <button
             onClick={() => navigate(-1)}
@@ -331,7 +369,7 @@ export default function BorrowReturnHistory() {
                   return (
                     <div key={borrow.borrowId} className="px-4 py-3 hover:bg-gray-50 transition">
                       <div className="flex gap-3">
-                        <div className="flex-shrink-0 pt-1">
+                        <div className="shrink-0 pt-1">
                           <span className="text-xl">{action.icon}</span>
                         </div>
                         <div className="flex-1 min-w-0">
@@ -357,7 +395,7 @@ export default function BorrowReturnHistory() {
                         </div>
                         <button
                           onClick={() => dismissCancellation(borrow.borrowId)}
-                          className="text-gray-400 hover:text-gray-600 flex-shrink-0"
+                          className="text-gray-400 hover:text-gray-600 shrink-0"
                           title="ปิดการแจ้งเตือน"
                         >
                           ✕
@@ -447,6 +485,34 @@ export default function BorrowReturnHistory() {
               {searchTerm || filter !== "all"
                 ? "ไม่พบข้อมูลการยืมและคืน"
                 : "ยังไม่มีข้อมูลการยืมและคืน"}
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {!loading && transactions.length > 0 && (
+            <div className="w-full flex items-center justify-between gap-3 mt-6 pt-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setPageIndex(Math.max(0, pageIndex - 1))
+                  setLastVisible(null)
+                }}
+                disabled={pageIndex === 0}
+                className="px-4 py-2 rounded-full border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                ← ก่อนหน้า
+              </button>
+              <span className="text-sm text-gray-600">
+                หน้า {pageIndex + 1}
+              </span>
+              <button
+                onClick={() => {
+                  setPageIndex(pageIndex + 1)
+                }}
+                disabled={!hasMore}
+                className="px-4 py-2 rounded-full border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                ถัดไป →
+              </button>
             </div>
           )}
         </div>
@@ -603,7 +669,7 @@ export default function BorrowReturnHistory() {
                   )}
                   {detailsModal.damagesAndIssues && (
                     <div>
-                      <span className="text-gray-600 text-red-600">ความเสียหายและปัญหา:</span>
+                      <span className="text-red-600">ความเสียหายและปัญหา:</span>
                       <p className="font-medium text-red-600">{detailsModal.damagesAndIssues}</p>
                     </div>
                   )}
