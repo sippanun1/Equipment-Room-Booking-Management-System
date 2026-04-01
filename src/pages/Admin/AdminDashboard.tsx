@@ -4,8 +4,8 @@ import { signOut } from "firebase/auth"
 import { collection, getDocs, query, where } from "firebase/firestore"
 import { auth, db } from "../../firebase/firebase"
 import Header from "../../components/Header"
-import { migrateAllImagesToStorage } from "../../utils/migrateImagesToStorage"
-import type { MigrationResult } from "../../utils/migrateImagesToStorage"
+// import { migrateAllImagesToStorage } from "../../utils/migrateImagesToStorage"
+// import type { MigrationResult } from "../../utils/migrateImagesToStorage"
 
 // Cache configuration
 interface CacheData {
@@ -53,9 +53,9 @@ export default function AdminDashboard() {
   const [lowStockItems, setLowStockItems] = useState<Equipment[]>([])
   const [outOfStockAssets, setOutOfStockAssets] = useState<{ id: string; name: string }[]>([])
   const [pendingBookings, setPendingBookings] = useState<RoomBooking[]>([])
-  const [migrating, setMigrating] = useState(false)
-  const [migrationProgress, setMigrationProgress] = useState("")
-  const [migrationDone, setMigrationDone] = useState<null | { equipment: MigrationResult; equipmentMaster: MigrationResult; rooms: MigrationResult }>(null)
+  // const [migrating, setMigrating] = useState(false)
+  // const [migrationProgress, setMigrationProgress] = useState("")
+  // const [migrationDone, setMigrationDone] = useState<null | { equipment: MigrationResult; equipmentMaster: MigrationResult; rooms: MigrationResult }>(null)
 
   // Load low stock items from Firestore
   useEffect(() => {
@@ -157,23 +157,23 @@ export default function AdminDashboard() {
     }
   }
 
-  const handleMigrateImages = async () => {
-    if (!window.confirm('ย้ายรูปภาพทั้งหมดไปยัง Firebase Storage?\n(ทำครั้งเดียวเท่านั้น หลังจากทำแล้วหน้าเว็บจะโหลดเร็วขึ้นมาก)')) return
-    setMigrating(true)
-    setMigrationDone(null)
-    try {
-      const results = await migrateAllImagesToStorage((col, current, total, _id) => {
-        setMigrationProgress(`${col}: ${current}/${total}`)
-      })
-      setMigrationDone(results)
-    } catch (err) {
-      console.error('Migration error:', err)
-      alert('เกิดข้อผิดพลาดในการย้ายรูปภาพ ดูรายละเอียดใน Console')
-    } finally {
-      setMigrating(false)
-      setMigrationProgress("")
-    }
-  }
+  // const handleMigrateImages = async () => {
+  //   if (!window.confirm('ย้ายรูปภาพทั้งหมดไปยัง Firebase Storage?\n(ทำครั้งเดียวเท่านั้น หลังจากทำแล้วหน้าเว็บจะโหลดเร็วขึ้นมาก)')) return
+  //   setMigrating(true)
+  //   setMigrationDone(null)
+  //   try {
+  //     const results = await migrateAllImagesToStorage((col, current, total, _id) => {
+  //       setMigrationProgress(`${col}: ${current}/${total}`)
+  //     })
+  //     setMigrationDone(results)
+  //   } catch (err) {
+  //     console.error('Migration error:', err)
+  //     alert('เกิดข้อผิดพลาดในการย้ายรูปภาพ ดูรายละเอียดใน Console')
+  //   } finally {
+  //     setMigrating(false)
+  //     setMigrationProgress("")
+  //   }
+  // }
 
   return (
     <div
@@ -398,7 +398,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Image Migration Tool */}
-          <button
+          {/* <button
             onClick={handleMigrateImages}
             disabled={migrating}
             className="
@@ -415,10 +415,10 @@ export default function AdminDashboard() {
             "
           >
             {migrating ? `⏳ กำลังย้ายรูปภาพ... ${migrationProgress}` : '🖼️ ย้ายรูปภาพไปยัง Storage (ทำ 1 ครั้ง)'}
-          </button>
+          </button> */}
 
           {/* Migration result */}
-          {migrationDone && (
+          {/* {migrationDone && (
             <div className="w-full mt-4 bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800">
               <p className="font-semibold mb-1">✅ ย้ายรูปภาพสำเร็จ!</p>
               {(['equipment', 'equipmentMaster', 'rooms'] as const).map((col) => {
@@ -431,7 +431,7 @@ export default function AdminDashboard() {
                 )
               })}
             </div>
-          )}
+          )} */}
 
           {/* Logout Button */}
           <button
