@@ -1379,11 +1379,14 @@ export default function AdminManageEquipment() {
                       <p>จำนวนอุปกรณ์: {item.quantity} {item.unit || "ชิ้น"}</p>
                       {item.category === "asset" && item.availableCount !== undefined && (
                         <p className={`mt-1 font-semibold ${
-                          item.availableCount === item.quantity ? 'text-green-600' :
+                          item.quantity === 0 ? 'text-gray-400' :
                           item.availableCount === 0 ? 'text-red-600' :
+                          item.availableCount === item.quantity ? 'text-green-600' :
                           'text-orange-600'
                         }`}>
-                          พร้อมใช้: {item.availableCount}/{item.quantity}
+                          {item.quantity === 0
+                            ? 'ไม่มีอุปกรณ์ในระบบ'
+                            : `พร้อมใช้: ${item.availableCount}/${item.quantity}`}
                         </p>
                       )}
                     </div>
