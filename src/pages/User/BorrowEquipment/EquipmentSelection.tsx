@@ -57,6 +57,8 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   const [filteredEquipment, setFilteredEquipment] = useState<Equipment[]>([])
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map())
   const [loading, setLoading] = useState(true)
+  const [loadingAssets, setLoadingAssets] = useState(false)
+  const [loadingAssetsError, setLoadingAssetsError] = useState(false)
 
   // Check if any filter is active
   const hasActiveFilters = selectedCategory !== "all" || selectedType !== "ทั้งหมด" || selectedSubType !== "ทั้งหมด"
@@ -96,43 +98,58 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
         })
         setEquipmentTypes(customTypes)
 
-        // Load all equipment using new helper (combines equipment collection + new two-collection architecture)
-        const allEquipment = await loadAllEquipment()
-        
-        // Filter for available items only
-        const availableEquipment = allEquipment
-          .filter(item => {
-            if (item.category === "consumable") {
-              return item.quantity > 0
-            }
-            // For assets, check if availableCount > 0
-            const availCount = item.availableCount !== undefined ? item.availableCount : item.quantity
-            return availCount > 0
-          })
-          .map(item => {
-            // For assets, use availableCount; for consumables, use quantity
-            const displayAvailable = item.category === "asset" && item.availableCount !== undefined ? item.availableCount : item.quantity
-            return {
-              id: item.id,
-              name: item.name,
-              category: item.category,
-              quantity: item.quantity,
-              availableCount: item.availableCount,
-              unit: item.unit,
-              picture: item.picture,
-              inStock: displayAvailable > 0,
-              available: displayAvailable,
-              equipmentTypes: item.equipmentTypes,
-              equipmentSubTypes: item.equipmentSubTypes
-            }
-          })
-        
-        setEquipmentData(availableEquipment)
-        setFilteredEquipment(availableEquipment)
+        // Phase 1: Load consumables fast from equipment collection directly
+        const quickSnap = await getDocs(collection(db, "equipment"))
+        const quickItems: Equipment[] = []
+        quickSnap.forEach((docSnap) => {
+          const data = docSnap.data()
+          if ((data.category === "consumable" || data.category === "main") && (data.quantity ?? 0) > 0) {
+            quickItems.push({
+              id: docSnap.id, name: data.name, category: data.category,
+              quantity: data.quantity ?? 0, unit: data.unit || "ชิ้น",
+              picture: data.picture, inStock: true,
+              available: data.quantity ?? 0,
+              equipmentTypes: data.equipmentTypes || [],
+              equipmentSubTypes: data.equipmentSubTypes || []
+            })
+          }
+        })
+        setEquipmentData(quickItems)
+        setFilteredEquipment(quickItems)
+        setLoading(false)
+        setLoadingAssets(true)
+        setLoadingAssetsError(false)
+
+        // Phase 2: Full load including assets
+        try {
+          const allEquipment = await loadAllEquipment()
+          const availableEquipment = allEquipment
+            .filter(item => {
+              if (item.category === "consumable") return item.quantity > 0
+              const availCount = item.availableCount !== undefined ? item.availableCount : item.quantity
+              return availCount > 0
+            })
+            .map(item => {
+              const displayAvailable = item.category === "asset" && item.availableCount !== undefined ? item.availableCount : item.quantity
+              return {
+                id: item.id, name: item.name, category: item.category,
+                quantity: item.quantity, availableCount: item.availableCount,
+                unit: item.unit, picture: item.picture,
+                inStock: displayAvailable > 0, available: displayAvailable,
+                equipmentTypes: item.equipmentTypes, equipmentSubTypes: item.equipmentSubTypes
+              }
+            })
+          setEquipmentData(availableEquipment)
+          setFilteredEquipment(availableEquipment)
+        } catch (phase2Error) {
+          console.error("Error loading assets:", phase2Error)
+          setLoadingAssetsError(true)
+        }
       } catch (error) {
         console.error("Error loading equipment:", error)
       } finally {
         setLoading(false)
+        setLoadingAssets(false)
       }
     }
     loadEquipment()
@@ -223,14 +240,6 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   }
 
   const totalItems = Array.from(selectedItems.values()).reduce((sum, qty) => sum + qty, 0)
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">กำลังโหลด...</div>
-      </div>
-    )
-  }
 
   return (
     <div
@@ -488,8 +497,24 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
           </div>
 
           {/* Equipment Grid */}
+          <div className="w-full flex flex-col gap-2 mb-2">
+            {loading && (
+              <div className="w-full text-center py-6 text-gray-400 text-sm">กำลังโหลด...</div>
+            )}
+            {!loading && loadingAssets && (
+              <div className="w-full flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-600">
+                <span className="animate-spin">⏳</span>
+                <span>กำลังโหลดครุภัณฑ์...</span>
+              </div>
+            )}
+            {!loading && loadingAssetsError && (
+              <div className="w-full flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+                <span>⚠️ โหลดครุภัณฑ์ไม่สำเร็จ — แสดงเฉพาะวัสดุสิ้นเปลือง</span>
+              </div>
+            )}
+          </div>
           <div className="w-full grid grid-cols-2 gap-4 mb-6">
-            {paginatedEquipment.length > 0 ? (
+            {!loading && paginatedEquipment.length > 0 ? (
               paginatedEquipment.map((item) => (
                 <div
                   key={item.id}
@@ -627,11 +652,11 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                   )}
                 </div>
               ))
-            ) : (
+            ) : !loading && !loadingAssets ? (
               <div className="col-span-2 text-center text-gray-600 py-8">
                 ไม่พบอุปกรณ์ที่ค้นหา
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Pagination */}
