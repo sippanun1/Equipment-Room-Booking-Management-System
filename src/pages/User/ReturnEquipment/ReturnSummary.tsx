@@ -3,6 +3,7 @@ import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { useAuth } from "../../../hooks/useAuth"
 import { logReturnTransaction } from "../../../utils/borrowReturnLogger"
+import { syncMasterAvailableCount } from "../../../utils/equipmentHelper"
 import type { ReturnEquipmentItem } from "../../../App"
 
 interface ReturnSummaryProps {
@@ -39,7 +40,7 @@ export default function ReturnSummary({ returnEquipment, setReturnEquipment }: R
         min-h-screen
         bg-white
         bg-[radial-gradient(#dbeafe_1px,transparent_1px)]
-        bg-[length:18px_18px]
+        bg-size-[18px_18px]
       "
     >
       {/* ===== HEADER ===== */}
@@ -47,7 +48,7 @@ export default function ReturnSummary({ returnEquipment, setReturnEquipment }: R
 
       {/* ===== CONTENT ===== */}
       <div className="mt-6 flex justify-center">
-        <div className="w-full max-w-[360px] px-4 flex flex-col items-center">
+        <div className="w-full max-w-90 px-4 flex flex-col items-center">
           {/* Back Button */}
           <button
             onClick={() => navigate(-1)}
@@ -360,6 +361,12 @@ export default function ReturnSummary({ returnEquipment, setReturnEquipment }: R
                         "", // No general notes
                         returnedItems
                       )
+
+                      // Sync master available counts for returned assets
+                      const assetItems = returnedItems.filter(item => item.equipmentCategory === "asset")
+                      for (const item of assetItems) {
+                        await syncMasterAvailableCount(item.equipmentId)
+                      }
                     }
 
                     setShowConfirmModal(false)

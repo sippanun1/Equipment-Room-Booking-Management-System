@@ -182,6 +182,64 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
     loadEquipment()
   }, [])
 
+  // Retry loading assets (Phase 2) if it failed
+  const retryLoadingAssets = async () => {
+    try {
+      setLoadingAssets(true)
+      setLoadingAssetsError(false)
+
+      const allEquipment = await loadAllEquipment()
+      
+      // Step 1: Filter out unavailable items
+      const filtered = allEquipment.filter(item => {
+        if (item.category === "consumable" || item.category === "main") {
+          return (item.quantity ?? 0) > 0
+        }
+        if (item.category === "asset") {
+          if ((item.quantity ?? 0) === 0) return false
+          return item.availableCount !== undefined
+            ? item.availableCount > 0
+            : (item.quantity ?? 0) > 0
+        }
+        return false
+      })
+
+      // Step 2: Deduplicate by name
+      const nameMap = new Map<string, typeof filtered[0]>()
+      filtered.forEach(item => {
+        const existing = nameMap.get(item.name)
+        if (existing) {
+          existing.availableCount = (existing.availableCount ?? 0) + (item.availableCount ?? 0)
+          existing.quantity += item.quantity
+          existing.allIds = [...(existing.allIds ?? []), ...(item.allIds ?? [])]
+        } else {
+          nameMap.set(item.name, { ...item, allIds: [...(item.allIds ?? [])] })
+        }
+      })
+
+      const availableEquipment = Array.from(nameMap.values()).map(item => {
+        const displayAvailable =
+          item.category === "asset" && item.availableCount !== undefined
+            ? item.availableCount
+            : item.quantity
+        return {
+          id: item.id, name: item.name, category: item.category,
+          quantity: item.quantity, availableCount: item.availableCount,
+          unit: item.unit, picture: item.picture,
+          inStock: displayAvailable > 0, available: displayAvailable,
+          equipmentTypes: item.equipmentTypes, equipmentSubTypes: item.equipmentSubTypes
+        }
+      })
+      setEquipmentData(availableEquipment)
+      setFilteredEquipment(availableEquipment)
+    } catch (error) {
+      console.error("Error retrying asset load:", error)
+      setLoadingAssetsError(true)
+    } finally {
+      setLoadingAssets(false)
+    }
+  }
+
   useEffect(() => {
     let filtered = equipmentData
 
@@ -274,7 +332,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
         min-h-screen
         bg-white
         bg-[radial-gradient(#dbeafe_1px,transparent_1px)]
-        bg-[length:18px_18px]
+        bg-size-[18px_18px]
       "
     >
       {/* ===== HEADER ===== */}
@@ -312,7 +370,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
 
       {/* ===== CONTENT ===== */}
       <div className="mt-6 flex justify-center">
-        <div className="w-full max-w-[360px] px-4 flex flex-col items-center">
+        <div className="w-full max-w-90 px-4 flex flex-col items-center">
           {/* Back Button */}
           <button
             onClick={() => navigate(-1)}
@@ -535,8 +593,15 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
               </div>
             )}
             {!loading && loadingAssetsError && (
-              <div className="w-full flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
+              <div className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
                 <span>⚠️ โหลดครุภัณฑ์ไม่สำเร็จ — แสดงเฉพาะวัสดุสิ้นเปลือง</span>
+                <button
+                  onClick={retryLoadingAssets}
+                  disabled={loadingAssets}
+                  className="px-3 py-1 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 disabled:bg-gray-400 transition"
+                >
+                  {loadingAssets ? "กำลังลอง..." : "ลองใหม่"}
+                </button>
               </div>
             )}
           </div>
