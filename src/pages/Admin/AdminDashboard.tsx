@@ -4,6 +4,7 @@ import { signOut } from "firebase/auth"
 import { collection, getDocs, query, where } from "firebase/firestore"
 import { auth, db } from "../../firebase/firebase"
 import Header from "../../components/Header"
+import { loadAllEquipment } from "../../utils/equipmentHelper"
 // import { migrateAllImagesToStorage } from "../../utils/migrateImagesToStorage"
 // import type { MigrationResult } from "../../utils/migrateImagesToStorage"
 
@@ -57,57 +58,43 @@ export default function AdminDashboard() {
   // const [migrationProgress, setMigrationProgress] = useState("")
   // const [migrationDone, setMigrationDone] = useState<null | { equipment: MigrationResult; equipmentMaster: MigrationResult; rooms: MigrationResult }>(null)
 
-  // Load low stock items from Firestore
+  // Load low stock items and out of stock assets using unified equipmentHelper
   useEffect(() => {
-    const loadLowStockItems = async () => {
+    const loadEquipmentStatus = async () => {
       try {
-        // Check cache first
-        const cached = getCachedData('lowStock')
-        if (cached) {
-          setLowStockItems(cached)
-          return
-        }
+        // Load all equipment with proper caching and synced counts
+        const allEquipment = await loadAllEquipment()
 
-        // Single query for all consumables, filter client-side (compound queries need composite indexes)
+        // Filter low stock items (consumables with quantity < threshold)
         const LOW_STOCK_THRESHOLD = 10
-        const consumablesSnap = await getDocs(query(
-          collection(db, "equipment"),
-          where("category", "==", "consumable")
-        ))
-        const items: Equipment[] = []
-        consumablesSnap.forEach((doc) => {
-          const data = doc.data()
-          if ((data.quantity ?? 0) < LOW_STOCK_THRESHOLD) {
-            items.push({ id: doc.id, name: data.name, category: data.category, quantity: data.quantity ?? 0, unit: data.unit || "ชิ้น" })
-          }
-        })
-        
-        // Cache the results
-        setCachedData('lowStock', items)
-        setLowStockItems(items)
+        const lowStockItems = allEquipment.filter(
+          item => item.category === 'consumable' && (item.quantity ?? 0) < LOW_STOCK_THRESHOLD
+        ).map(item => ({
+          id: item.id,
+          name: item.name,
+          category: item.category,
+          quantity: item.quantity ?? 0,
+          unit: item.unit || 'ชิ้น'
+        }))
 
-        // Also check equipmentMaster for assets where available === 0 (all units borrowed)
-        const cachedAssets = getCachedData('outOfStockAssets')
-        if (cachedAssets) {
-          setOutOfStockAssets(cachedAssets)
-        } else {
-          const masterSnap = await getDocs(collection(db, "equipmentMaster"))
-          const outAssets: { id: string; name: string }[] = []
-          masterSnap.forEach((doc) => {
-            const data = doc.data()
-            // available === 0 means all units are borrowed, quantity > 0 means units exist
-            if ((data.available ?? -1) === 0 && (data.quantity ?? 0) > 0) {
-              outAssets.push({ id: doc.id, name: data.name })
-            }
-          })
-          setCachedData('outOfStockAssets', outAssets)
-          setOutOfStockAssets(outAssets)
-        }
+        // Filter out of stock assets (assets with availableCount === 0 and quantity > 0 means all units borrowed)
+        const outOfStockAssets = allEquipment.filter(
+          item => item.category === 'asset' && (item.availableCount ?? 0) === 0 && (item.quantity ?? 0) > 0
+        ).map(item => ({
+          id: item.id,
+          name: item.name
+        }))
+
+        // Update state with fresh data
+        setCachedData('lowStock', lowStockItems)
+        setLowStockItems(lowStockItems)
+        setCachedData('outOfStockAssets', outOfStockAssets)
+        setOutOfStockAssets(outOfStockAssets)
       } catch (error) {
-        console.error("Error loading low stock items:", error)
+        console.error("Error loading equipment status:", error)
       }
     }
-    loadLowStockItems()
+    loadEquipmentStatus()
   }, [])
 
   // Load pending and upcoming room bookings from Firestore

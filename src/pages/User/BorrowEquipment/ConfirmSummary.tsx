@@ -5,7 +5,7 @@ import { db } from "../../../firebase/firebase"
 import Header from "../../../components/Header"
 import { useAuth } from "../../../hooks/useAuth"
 import { logBorrowTransaction } from "../../../utils/borrowReturnLogger"
-import { getAvailableAssetInstances, markAssetInstancesAsBorrowed, invalidateEquipmentCache, loadAllEquipment } from "../../../utils/equipmentHelper"
+import { getAvailableAssetInstances, markAssetInstancesAsBorrowed, invalidateEquipmentCache, loadAllEquipment, syncMasterAvailableCount } from "../../../utils/equipmentHelper"
 import type { SelectedEquipment } from "../../../App"
 
 interface ConfirmSummaryProps {
@@ -221,6 +221,8 @@ export default function ConfirmSummary({ cartItems }: ConfirmSummaryProps) {
           const selectedInstanceIds = selectedCodes.map(c => c.equipmentId)
           
           await markAssetInstancesAsBorrowed(selectedInstanceIds)
+          // Sync master available count to ensure inventory is consistent
+          await syncMasterAvailableCount(item.id)
         }
       }
 
@@ -244,7 +246,7 @@ export default function ConfirmSummary({ cartItems }: ConfirmSummaryProps) {
         min-h-screen
         bg-white
         bg-[radial-gradient(#dbeafe_1px,transparent_1px)]
-        bg-[length:18px_18px]
+        bg-size-[18px_18px]
       "
     >
       {/* ===== HEADER ===== */}
@@ -252,7 +254,7 @@ export default function ConfirmSummary({ cartItems }: ConfirmSummaryProps) {
 
       {/* ===== CONTENT ===== */}
       <div className="mt-6 flex justify-center">
-        <div className="w-full max-w-[360px] px-4 flex flex-col items-center">
+        <div className="w-full max-w-90 px-4 flex flex-col items-center">
           {/* Back Button */}
           <button
             onClick={() => navigate(-1)}
