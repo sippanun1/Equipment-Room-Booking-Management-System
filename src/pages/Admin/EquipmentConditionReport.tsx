@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { collection, getDocs, query, where, updateDoc, doc, getDoc } from "firebase/firestore"
 import { db } from "../../firebase/firebase"
 import Header from "../../components/Header"
-import { findAssetInstanceBySerialCode, updateAssetInstanceCondition } from "../../utils/equipmentHelper"
+import { findAssetInstanceBySerialCode, updateAssetInstanceCondition, syncMasterAvailableCount } from "../../utils/equipmentHelper"
 import { logAdminAction } from "../../utils/adminLogger"
 import { useAuth } from "../../hooks/useAuth"
 import type { BorrowTransaction } from "../../utils/borrowReturnLogger"
@@ -356,6 +356,8 @@ export default function EquipmentConditionReport() {
               // Determine availability: mark as available if condition is "ปกติ", otherwise mark unavailable
               const shouldBeAvailable = newCondition === "ปกติ"
               await updateAssetInstanceCondition(assetInstance.id, newCondition, shouldBeAvailable)
+              // Sync master available count so loadAllEquipment shows the updated value
+              await syncMasterAvailableCount(assetInstance.equipmentId)
             }
           } catch (error) {
             console.error("Error updating asset instance condition:", error)
@@ -422,7 +424,7 @@ export default function EquipmentConditionReport() {
         min-h-screen
         bg-white
         bg-[radial-gradient(#dbeafe_1px,transparent_1px)]
-        bg-[length:18px_18px]
+        bg-size-[18px_18px]
       "
     >
       {/* ===== HEADER ===== */}
@@ -445,7 +447,7 @@ export default function EquipmentConditionReport() {
 
       {/* ===== CONTENT ===== */}
       <div className="mt-6 flex justify-center">
-        <div className="w-full max-w-[360px] px-4 flex flex-col items-center pb-6">
+        <div className="w-full max-w-90 px-4 flex flex-col items-center pb-6">
           {/* Back Button */}
           <button
             onClick={() => navigate('/admin')}

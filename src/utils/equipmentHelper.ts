@@ -22,6 +22,9 @@ export interface EquipmentMaster {
   equipmentTypes: string[]
   equipmentSubTypes: string[]
   picture?: string
+  // Synced fields written by syncMasterAvailableCount — authoritative
+  syncedQuantity?: number
+  syncedAvailable?: number
 }
 
 export interface AssetInstance {
@@ -107,7 +110,10 @@ export async function loadAllEquipment(useCache = true): Promise<EquipmentDispla
         unit: data.unit,
         equipmentTypes: data.equipmentTypes || [],
         equipmentSubTypes: data.equipmentSubTypes || [],
-        picture: data.picture
+        picture: data.picture,
+        // Preserve synced counts if present (written by syncMasterAvailableCount)
+        syncedQuantity: typeof data.quantity === 'number' ? data.quantity : undefined,
+        syncedAvailable: typeof data.available === 'number' ? data.available : undefined,
       })
     })
 
@@ -133,12 +139,17 @@ export async function loadAllEquipment(useCache = true): Promise<EquipmentDispla
     masterMap.forEach((master, masterId) => {
       const instances = masterInstancesMap.get(masterId) || []
       const instanceIds = instances.map((inst) => inst.id)
-      const availableCount = instances.filter(inst => inst.available).length
+      const instanceAvailableCount = instances.filter(inst => inst.available).length
+
+      // If syncMasterAvailableCount has run, its values are authoritative.
+      // This catches orphaned instances where master says 0 but instances still exist.
+      const quantity = master.syncedQuantity !== undefined ? master.syncedQuantity : instances.length
+      const availableCount = master.syncedAvailable !== undefined ? master.syncedAvailable : instanceAvailableCount
       results.push({
         id: masterId,
         name: master.name,
         category: master.category,
-        quantity: instances.length,
+        quantity: quantity,
         availableCount: availableCount,
         unit: master.unit,
         equipmentTypes: master.equipmentTypes,
