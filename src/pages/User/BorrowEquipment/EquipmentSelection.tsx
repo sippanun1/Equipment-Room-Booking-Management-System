@@ -471,60 +471,56 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                 </div>
 
                 {/* Type Filters */}
-                <div className="mt-0 mb-4">
-                  <div className="text-xs font-semibold text-gray-600 mb-2">ประเภท:</div>
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      onClick={() => setSelectedType("ทั้งหมด")}
-                      className={`
-                        px-4 py-2
-                        rounded-full
-                        text-sm font-medium
-                        transition
-                        ${selectedType === "ทั้งหมด"
-                          ? "bg-orange-500 text-white"
-                          : "border border-gray-300 text-gray-700 hover:border-orange-500"
-                        }
-                      `}
-                    >
-                      ทั้งหมด
-                    </button>
-                    {Object.keys(equipmentTypes).map((type) => (
+                {Object.keys(equipmentTypes).length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold text-gray-600 mb-2">ประเภทอุปกรณ์:</p>
+                    <div className="flex gap-2 flex-wrap">
                       <button
-                        key={type}
-                        onClick={() => setSelectedType(type)}
+                        onClick={() => { setSelectedType("ทั้งหมด"); setSelectedSubType("ทั้งหมด") }}
                         className={`
-                          px-4 py-2
-                          rounded-full
-                          text-sm font-medium
-                          transition
-                          ${selectedType === type
-                            ? "bg-orange-500 text-white"
-                            : "border border-gray-300 text-gray-700 hover:border-orange-500"
+                          px-3 py-1.5 rounded-full text-xs font-medium transition
+                          ${
+                            selectedType === "ทั้งหมด"
+                              ? "bg-blue-500 text-white"
+                              : "border border-gray-300 text-gray-700 hover:border-blue-500"
                           }
                         `}
                       >
-                        {type}
+                        ทั้งหมด
                       </button>
-                    ))}
+                      {Object.keys(equipmentTypes).map((type) => (
+                        <button
+                          key={type}
+                          onClick={() => { setSelectedType(type); setSelectedSubType("ทั้งหมด") }}
+                          className={`
+                            px-3 py-1.5 rounded-full text-xs font-medium transition
+                            ${
+                              selectedType === type
+                                ? "bg-blue-500 text-white"
+                                : "border border-gray-300 text-gray-700 hover:border-blue-500"
+                            }
+                          `}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* SubType Filters */}
                 {selectedType !== "ทั้งหมด" && equipmentTypes[selectedType]?.length > 0 && (
                   <div className="mb-4">
-                    <div className="text-xs font-semibold text-gray-600 mb-2">ประเภทย่อย:</div>
+                    <p className="text-xs font-semibold text-gray-600 mb-2">ประเภทย่อย:</p>
                     <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={() => setSelectedSubType("ทั้งหมด")}
                         className={`
-                          px-4 py-2
-                          rounded-full
-                          text-sm font-medium
-                          transition
-                          ${selectedSubType === "ทั้งหมด"
-                            ? "bg-blue-500 text-white"
-                            : "border border-gray-300 text-gray-700 hover:border-blue-500"
+                          px-3 py-1.5 rounded-full text-xs font-medium transition
+                          ${
+                            selectedSubType === "ทั้งหมด"
+                              ? "bg-blue-500 text-white"
+                              : "border border-gray-300 text-gray-700 hover:border-blue-500"
                           }
                         `}
                       >
@@ -535,13 +531,11 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                           key={subType}
                           onClick={() => setSelectedSubType(subType)}
                           className={`
-                            px-4 py-2
-                            rounded-full
-                            text-sm font-medium
-                            transition
-                            ${selectedSubType === subType
-                              ? "bg-blue-500 text-white"
-                              : "border border-gray-300 text-gray-700 hover:border-blue-500"
+                            px-3 py-1.5 rounded-full text-xs font-medium transition
+                            ${
+                              selectedSubType === subType
+                                ? "bg-blue-500 text-white"
+                                : "border border-gray-300 text-gray-700 hover:border-blue-500"
                             }
                           `}
                         >
