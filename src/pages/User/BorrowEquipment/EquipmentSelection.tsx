@@ -39,7 +39,6 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   const [selectedType, setSelectedType] = useState<string>("ทั้งหมด")
   const [selectedSubType, setSelectedSubType] = useState<string>("ทั้งหมด")
   const [showFilters, setShowFilters] = useState(false)
-  const [equipmentTypes, setEquipmentTypes] = useState<{ [key: string]: string[] }>({})
   const [equipmentData, setEquipmentData] = useState<Equipment[]>([])
   const [filteredEquipment, setFilteredEquipment] = useState<Equipment[]>([])
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map())
@@ -78,17 +77,8 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   useEffect(() => {
     const loadEquipment = async () => {
       try {
-        // Phase 1: fetch equipment types AND consumables in parallel (no sequential wait)
-        const [typesSnapshot, quickSnap] = await Promise.all([
-          getDocs(collection(db, "equipmentTypes")),
-          getDocs(collection(db, "equipment"))
-        ])
-        const customTypes: { [key: string]: string[] } = {}
-        typesSnapshot.forEach((doc) => {
-          const data = doc.data()
-          customTypes[data.name] = data.subtypes || []
-        })
-        setEquipmentTypes(customTypes)
+        // Phase 1: fetch consumables quickly
+        const quickSnap = await getDocs(collection(db, "equipment"))
         const quickItems: Equipment[] = []
         quickSnap.forEach((docSnap) => {
           const data = docSnap.data()
@@ -288,6 +278,28 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   // Get only displayed items based on batches
   const displayedEquipment = filteredEquipment.slice(0, displayedBatches * ITEMS_PER_PAGE)
 
+  // Get all unique equipment types from actual equipment data
+  const uniqueEquipmentTypes = Array.from(
+    new Set(
+      equipmentData
+        .filter(item => selectedCategory === "all" || item.category === selectedCategory)
+        .flatMap(item => item.equipmentTypes || [])
+    )
+  ).sort()
+
+  // Get all unique subtypes for selected type from actual equipment data
+  const uniqueSubTypes = Array.from(
+    new Set(
+      equipmentData
+        .filter(
+          item =>
+            (selectedCategory === "all" || item.category === selectedCategory) &&
+            item.equipmentTypes?.includes(selectedType)
+        )
+        .flatMap(item => item.equipmentSubTypes || [])
+    )
+  ).sort()
+
   const handleAddQuantity = (equipmentId: string) => {
     const equipment = equipmentData.find(e => e.id === equipmentId)
     if (!equipment) return
@@ -486,7 +498,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                 </div>
 
                 {/* Type Filters */}
-                {Object.keys(equipmentTypes).length > 0 && (
+                {uniqueEquipmentTypes.length > 0 && (
                   <div className="mb-4">
                     <p className="text-xs font-semibold text-gray-600 mb-2">ประเภทอุปกรณ์:</p>
                     <div className="flex gap-2 flex-wrap">
@@ -503,7 +515,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                       >
                         ทั้งหมด
                       </button>
-                      {Object.keys(equipmentTypes).map((type) => (
+                      {uniqueEquipmentTypes.map((type) => (
                         <button
                           key={type}
                           onClick={() => { setSelectedType(type); setSelectedSubType("ทั้งหมด") }}
@@ -524,7 +536,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                 )}
 
                 {/* SubType Filters */}
-                {selectedType !== "ทั้งหมด" && equipmentTypes[selectedType]?.length > 0 && (
+                {selectedType !== "ทั้งหมด" && uniqueSubTypes.length > 0 && (
                   <div className="mb-4">
                     <p className="text-xs font-semibold text-gray-600 mb-2">ประเภทย่อย:</p>
                     <div className="flex gap-2 flex-wrap">
@@ -541,7 +553,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                       >
                         ทั้งหมด
                       </button>
-                      {equipmentTypes[selectedType].map((subType) => (
+                      {uniqueSubTypes.map((subType) => (
                         <button
                           key={subType}
                           onClick={() => setSelectedSubType(subType)}
