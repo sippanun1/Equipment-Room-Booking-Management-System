@@ -99,8 +99,12 @@ export default function ReturnRoomForm({ booking, onConfirmReturn }: ReturnRoomF
                 ข้อมูลห้อง
               </p>
               <div className="flex gap-3 mb-3">
-                <div className="w-16 h-16 flex-shrink-0 rounded-lg bg-gray-200 flex items-center justify-center text-2xl">
-                  {booking.image}
+                <div className="w-16 h-16 flex-shrink-0 rounded-lg bg-gray-200 flex items-center justify-center text-2xl overflow-hidden">
+                  {booking.image ? (
+                    <img src={booking.image} alt="room" className="w-full h-full object-cover" />
+                  ) : (
+                    "📸"
+                  )}
                 </div>
                 <div className="flex-1 text-xs" style={{ color: "#595959" }}>
                   <p className="font-medium">{booking.room}</p>
