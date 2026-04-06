@@ -163,6 +163,10 @@ export default function AdminManageEquipment() {
   const [loading, setLoading] = useState(true)
   const [loadingAssets, setLoadingAssets] = useState(false)
   const [loadingAssetsError, setLoadingAssetsError] = useState(false)
+  const [displayedBatches, setDisplayedBatches] = useState(1) // Number of 30-item batches to display
+  const [loadingMoreBatches, setLoadingMoreBatches] = useState(false) // Shows if more batches are coming
+
+  const ITEMS_PER_PAGE = 30
 
   // Load equipment from Firestore — two-phase: consumables first, then full load
   const loadEquipment = async (skipCache = false) => {
@@ -292,6 +296,35 @@ export default function AdminManageEquipment() {
     }
     return matchesSearch && matchesCategory && matchesStockStatus && matchesEquipmentType && matchesEquipmentSubType
   }), [groupedEquipment, searchTerm, selectedCategory, selectedEquipmentType, selectedEquipmentSubType, selectedStockStatus])
+
+  // Progressive batch loading: show first batch, load next batch in background
+  useEffect(() => {
+    const totalItems = filteredEquipment.length
+    const maxBatches = Math.ceil(totalItems / ITEMS_PER_PAGE)
+    
+    // If there are more batches to load
+    if (displayedBatches < maxBatches) {
+      setLoadingMoreBatches(true)
+      
+      // Load next batch with small delay for UX feedback
+      const timer = setTimeout(() => {
+        setDisplayedBatches(displayedBatches + 1)
+        setLoadingMoreBatches(false)
+      }, 500)
+      
+      return () => clearTimeout(timer)
+    } else {
+      setLoadingMoreBatches(false)
+    }
+  }, [filteredEquipment, displayedBatches])
+
+  // Get only displayed items based on batches
+  const displayedEquipment = filteredEquipment.slice(0, displayedBatches * ITEMS_PER_PAGE)
+
+  // Reset to first batch when filters change
+  useEffect(() => {
+    setDisplayedBatches(1)
+  }, [searchTerm, selectedCategory, selectedEquipmentType, selectedEquipmentSubType, selectedStockStatus])
 
   const handleAddEquipment = () => {
     setAddEquipmentForm({
@@ -1217,7 +1250,7 @@ export default function AdminManageEquipment() {
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-500">
-                  พบ <span className="font-semibold text-blue-600">{filteredEquipment.length}</span> รายการ
+                  พบ <span className="font-semibold text-blue-600">{displayedEquipment.length}</span> รายการ
                 </span>
                 <span className={`text-gray-400 transition-transform ${showStockStatusFilter ? 'rotate-180' : ''}`}>
                   ▼
@@ -1394,8 +1427,9 @@ export default function AdminManageEquipment() {
                 )}
               </>
             )}
-            {!loading && filteredEquipment.length > 0 ? (
-              filteredEquipment.map((item: any) => (
+            {!loading && displayedEquipment.length > 0 ? (
+              <>
+                {displayedEquipment.map((item: any) => (
 
                 <div
                   key={item.name}
@@ -1495,7 +1529,18 @@ export default function AdminManageEquipment() {
                     </button>
                   </div>
                 </div>
-              ))
+              ))}
+
+                {/* Loading More Batches Indicator */}
+                {loadingMoreBatches && (
+                  <div className="col-span-full flex justify-center py-6">
+                    <div className="flex items-center gap-2">
+                      <span className="animate-spin text-lg">⏳</span>
+                      <span className="text-sm text-gray-500">กำลังโหลดเพิ่มเติม...</span>
+                    </div>
+                  </div>
+                )}
+              </>
             ) : !loadingAssets ? (
               <div className="w-full text-center text-gray-500 py-8">
                 ไม่พบอุปกรณ์ที่ค้นหา

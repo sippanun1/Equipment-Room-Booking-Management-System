@@ -39,7 +39,6 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   const [selectedType, setSelectedType] = useState<string>("ทั้งหมด")
   const [selectedSubType, setSelectedSubType] = useState<string>("ทั้งหมด")
   const [showFilters, setShowFilters] = useState(false)
-  const [currentPage, setCurrentPage] = useState(1)
   const [equipmentTypes, setEquipmentTypes] = useState<{ [key: string]: string[] }>({})
   const [equipmentData, setEquipmentData] = useState<Equipment[]>([])
   const [filteredEquipment, setFilteredEquipment] = useState<Equipment[]>([])
@@ -47,6 +46,8 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   const [loading, setLoading] = useState(true)
   const [loadingAssets, setLoadingAssets] = useState(false)
   const [loadingAssetsError, setLoadingAssetsError] = useState(false)
+  const [displayedBatches, setDisplayedBatches] = useState(1) // Number of 30-item batches to display
+  const [loadingMoreBatches, setLoadingMoreBatches] = useState(false) // Shows if more batches are coming
 
   // Check if any filter is active
   const hasActiveFilters = selectedCategory !== "all" || selectedType !== "ทั้งหมด" || selectedSubType !== "ทั้งหมด"
@@ -230,6 +231,27 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
     }
   }
 
+  // Progressive batch loading: show first batch, load next batch in background
+  useEffect(() => {
+    const totalItems = filteredEquipment.length
+    const maxBatches = Math.ceil(totalItems / ITEMS_PER_PAGE)
+    
+    // If there are more batches to load
+    if (displayedBatches < maxBatches) {
+      setLoadingMoreBatches(true)
+      
+      // Simulate batch loading with small delay for UX feedback
+      const timer = setTimeout(() => {
+        setDisplayedBatches(displayedBatches + 1)
+        setLoadingMoreBatches(false)
+      }, 500)
+      
+      return () => clearTimeout(timer)
+    } else {
+      setLoadingMoreBatches(false)
+    }
+  }, [filteredEquipment, displayedBatches])
+
   useEffect(() => {
     let filtered = equipmentData
 
@@ -255,6 +277,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
     }
 
     setFilteredEquipment(filtered)
+    setDisplayedBatches(1) // Reset to first batch when filters change
   }, [searchTerm, selectedCategory, selectedType, selectedSubType, equipmentData])
 
   // Reset subtype when type changes
@@ -262,16 +285,8 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
     setSelectedSubType("ทั้งหมด")
   }, [selectedType])
 
-  // Reset page when filters change
-  useEffect(() => {
-    setCurrentPage(1)
-  }, [searchTerm, selectedCategory, selectedType, selectedSubType])
-
-  // Pagination calculations
-  const totalPages = Math.ceil(filteredEquipment.length / ITEMS_PER_PAGE)
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-  const endIndex = startIndex + ITEMS_PER_PAGE
-  const paginatedEquipment = filteredEquipment.slice(startIndex, endIndex)
+  // Get only displayed items based on batches
+  const displayedEquipment = filteredEquipment.slice(0, displayedBatches * ITEMS_PER_PAGE)
 
   const handleAddQuantity = (equipmentId: string) => {
     const equipment = equipmentData.find(e => e.id === equipmentId)
@@ -590,8 +605,9 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
             )}
           </div>
           <div className="w-full grid grid-cols-2 gap-4 mb-6">
-            {!loading && paginatedEquipment.length > 0 ? (
-              paginatedEquipment.map((item) => (
+            {!loading && displayedEquipment.length > 0 ? (
+              <>
+                {displayedEquipment.map((item) => (
                 <div
                   key={item.id}
                   className={`
@@ -727,7 +743,18 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                     </button>
                   )}
                 </div>
-              ))
+              ))}
+                
+                {/* Loading More Batches Indicator */}
+                {loadingMoreBatches && (
+                  <div className="col-span-2 flex justify-center py-6">
+                    <div className="flex items-center gap-2">
+                      <span className="animate-spin text-lg">⏳</span>
+                      <span className="text-sm text-gray-500">กำลังโหลดเพิ่มเติม...</span>
+                    </div>
+                  </div>
+                )}
+              </>
             ) : !loading && !loadingAssets ? (
               <div className="col-span-2 text-center text-gray-600 py-8">
                 ไม่พบอุปกรณ์ที่ค้นหา
@@ -735,83 +762,10 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
             ) : null}
           </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="w-full flex justify-center items-center gap-2 mb-4">
-              <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                className={`
-                  px-3 py-1
-                  rounded-full
-                  text-sm font-medium
-                  transition
-                  ${currentPage === 1
-                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  }
-                `}
-              >
-                ◀
-              </button>
-              
-              {/* Page Numbers */}
-              <div className="flex gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter(page => {
-                    // Show first, last, current, and pages around current
-                    if (page === 1 || page === totalPages) return true
-                    if (Math.abs(page - currentPage) <= 1) return true
-                    return false
-                  })
-                  .map((page, index, arr) => (
-                    <div key={page} className="flex items-center">
-                      {/* Add ellipsis if there's a gap */}
-                      {index > 0 && arr[index - 1] !== page - 1 && (
-                        <span className="px-1 text-gray-400">...</span>
-                      )}
-                      <button
-                        onClick={() => setCurrentPage(page)}
-                        className={`
-                          w-8 h-8
-                          rounded-full
-                          text-sm font-medium
-                          transition
-                          ${currentPage === page
-                            ? "bg-orange-500 text-white"
-                            : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                          }
-                        `}
-                      >
-                        {page}
-                      </button>
-                    </div>
-                  ))}
-              </div>
-
-              <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                className={`
-                  px-3 py-1
-                  rounded-full
-                  text-sm font-medium
-                  transition
-                  ${currentPage === totalPages
-                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  }
-                `}
-              >
-                ▶
-              </button>
-            </div>
-          )}
-
           {/* Page Info */}
           {filteredEquipment.length > 0 && (
             <div className="w-full text-center text-xs text-gray-500 mb-4">
-              แสดง {startIndex + 1}-{Math.min(endIndex, filteredEquipment.length)} จาก {filteredEquipment.length} รายการ
+              แสดง 1-{displayedEquipment.length} จาก {filteredEquipment.length} รายการ
             </div>
           )}
 
