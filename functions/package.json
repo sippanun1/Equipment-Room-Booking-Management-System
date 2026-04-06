@@ -1,0 +1,19 @@
+{
+  "name": "functions",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions"
+  },
+  "main": "lib/index.ts",
+  "dependencies": {
+    "firebase-admin": "^13.9.2",
+    "firebase-functions": "^7.0.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3"
+  }
+}

@@ -37,6 +37,13 @@ export interface RoomBookingEmailData {
   userId: string
 }
 
+export interface BorrowReturnReminderEmailData {
+  userEmail: string
+  userName: string
+  equipmentNames: string[]
+  expectedReturnTime: string
+}
+
 export async function sendBorrowAcknowledgmentEmail(data: BorrowEmailData): Promise<{ success: boolean; message: string }> {
   try {
     // Generate equipment list HTML with serial codes if available
@@ -281,6 +288,49 @@ export async function sendRoomBookingRejectionToUser(data: RoomBookingEmailData 
     }
   } catch (error) {
     console.error('Error sending rejection email:', error)
+    return {
+      success: false,
+      message: 'ขออภัย เกิดข้อผิดพลาดในการส่งอีเมล'
+    }
+  }
+}
+
+// Borrow Return Reminder Email
+export async function sendBorrowReturnReminderEmail(data: BorrowReturnReminderEmailData): Promise<{ success: boolean; message: string }> {
+  try {
+    await addDoc(collection(db, 'mail'), {
+      to: data.userEmail,
+      message: {
+        subject: `🔔 เตือนการคืนอุปกรณ์ - วันนี้เวลา ${data.expectedReturnTime} น.`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <p>${data.userName}</p>
+            
+            <p>ขอแจ้งเตือนว่า อุปกรณ์ที่ยืมจะครบกำหนดส่งคืนในเวลา <strong>${data.expectedReturnTime}</strong>น. วันนี้</p>
+            
+            <div style="background-color: #fff3e0; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f57c00;">
+              <p><strong>อุปกรณ์ที่ยืม:</strong></p>
+              <ul>
+                ${data.equipmentNames.map(name => `<li>${name}</li>`).join('')}
+              </ul>
+            </div>
+            
+            <p>กรุณาดำเนินการส่งคืนตามเวลาที่กำหนด เพื่อให้ผู้อื่นสามารถใช้งานต่อได้อย่างสะดวก กรุณาวางเก็บเข้าที่เดิม</p>
+            
+            <p>หากคุณได้ดำเนินการคืนเรียบร้อยแล้ว สามารถละเว้นข้อความนี้ได้</p>
+            
+            <p>ขอบคุณครับ/ค่ะ</p>
+          </div>
+        `
+      }
+    })
+
+    return {
+      success: true,
+      message: 'ส่งอีเมลเตือนการคืนอุปกรณ์สำเร็จแล้ว'
+    }
+  } catch (error) {
+    console.error('Error sending return reminder email:', error)
     return {
       success: false,
       message: 'ขออภัย เกิดข้อผิดพลาดในการส่งอีเมล'

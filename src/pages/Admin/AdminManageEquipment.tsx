@@ -10,18 +10,6 @@ import { loadAllEquipment, loadEquipmentTypes as loadEquipmentTypesFromCache, in
 // Low stock threshold for consumables (in units)
 const LOW_STOCK_THRESHOLD = 10
 
-// Default equipment types with subtypes
-const defaultEquipmentTypes: { [key: string]: string[] } = {
-  "งานวัดและตรวจสอบ": [],
-  "งานถอด-ประกอบชิ้นส่วน": [],
-  "งานติดตั้งอุปกรณ์": [],
-  "งานทำเครื่องหมายและขีดเส้น": [],
-  "งานช่างมือพื้นฐาน": [],
-  "Welding": ["SMAW", "GMAW", "GTAW", "GAS", "FCAW"],
-  "Machine": ["Milling", "Lathe", "เครื่องไส", "เครื่องตัด", "เครื่องเจาะ"],
-  "Safety": [],
-}
-
 interface Equipment {
   id: string
   name: string
@@ -156,7 +144,7 @@ export default function AdminManageEquipment() {
   const [isSubmittingEquipment, setIsSubmittingEquipment] = useState(false)
   const [isSubmittingStock, setIsSubmittingStock] = useState(false)
   // Custom equipment types (loaded from Firebase)
-  const [equipmentTypes, setEquipmentTypes] = useState<{ [key: string]: string[] }>(defaultEquipmentTypes)
+  const [equipmentTypes, setEquipmentTypes] = useState<{ [key: string]: string[] }>({})
   const [showAddTypeModal, setShowAddTypeModal] = useState(false)
   const [showManageTypesModal, setShowManageTypesModal] = useState(false)
   const [newTypeName, setNewTypeName] = useState("")
@@ -224,7 +212,7 @@ export default function AdminManageEquipment() {
     const loadTypes = async () => {
       try {
         const cachedTypes = await loadEquipmentTypesFromCache()
-        setEquipmentTypes({ ...defaultEquipmentTypes, ...cachedTypes })
+        setEquipmentTypes(cachedTypes)
       } catch (error) {
         console.error("Error loading equipment types:", error)
       }

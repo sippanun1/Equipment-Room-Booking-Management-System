@@ -63,6 +63,9 @@ export interface BorrowTransaction {
   cancelReason?: string
   // Return timestamp
   returnTimestamp?: number
+  // Reminder notification fields
+  reminderSent?: boolean // Whether return reminder email has been sent
+  reminderSentAt?: number // Timestamp when reminder was sent
 }
 
 /**
@@ -99,7 +102,8 @@ export async function logBorrowTransaction(
       conditionBeforeBorrow,
       status: "borrowed", // Item is borrowed immediately
       notes: notes || "",
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      reminderSent: false // Initialize reminder as not sent
     }
 
     // Store in borrowHistory collection
