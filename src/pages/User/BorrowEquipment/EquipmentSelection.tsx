@@ -7,18 +7,6 @@ import { loadAllEquipment } from "../../../utils/equipmentHelper"
 import shoppingCartIcon from "../../../assets/shoppingcart.svg"
 import type { SelectedEquipment } from "../../../App"
 
-// Default equipment types with subtypes
-const defaultEquipmentTypes: { [key: string]: string[] } = {
-  "งานวัดและตรวจสอบ": [],
-  "งานถอด-ประกอบชิ้นส่วน": [],
-  "งานติดตั้งอุปกรณ์": [],
-  "งานทำเครื่องหมายและขีดเส้น": [],
-  "งานช่างมือพื้นฐาน": [],
-  "Welding": ["SMAW", "GMAW", "GTAW", "GAS", "FCAW"],
-  "Machine": ["Milling", "Lathe", "เครื่องไส", "เครื่องตัด", "เครื่องเจาะ"],
-  "Safety": [],
-}
-
 interface Equipment {
   id: string
   name: string
@@ -52,7 +40,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   const [selectedSubType, setSelectedSubType] = useState<string>("ทั้งหมด")
   const [showFilters, setShowFilters] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
-  const [equipmentTypes, setEquipmentTypes] = useState<{ [key: string]: string[] }>(defaultEquipmentTypes)
+  const [equipmentTypes, setEquipmentTypes] = useState<{ [key: string]: string[] }>({})
   const [equipmentData, setEquipmentData] = useState<Equipment[]>([])
   const [filteredEquipment, setFilteredEquipment] = useState<Equipment[]>([])
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map())
@@ -94,7 +82,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
           getDocs(collection(db, "equipmentTypes")),
           getDocs(collection(db, "equipment"))
         ])
-        const customTypes: { [key: string]: string[] } = { ...defaultEquipmentTypes }
+        const customTypes: { [key: string]: string[] } = {}
         typesSnapshot.forEach((doc) => {
           const data = doc.data()
           customTypes[data.name] = data.subtypes || []
