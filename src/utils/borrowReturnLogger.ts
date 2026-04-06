@@ -1,3 +1,22 @@
+/**
+ * BORROW/RETURN TRACKING SYSTEM
+ * ==============================
+ * 
+ * Handles all borrow and return transactions in the system.
+ * 
+ * Key Features:
+ * - Track borrow requests (during class, teaching, outside hours)
+ * - Record equipment returned with conditions (good, damaged, lost)
+ * - Handle partial returns for consumables
+ * - Track individual asset serial codes and their conditions
+ * - Send reminder emails 30 minutes before expected return
+ * - Validate borrowed quantities match available stock
+ * 
+ * Collections:
+ * - borrowHistory: All borrow/return transactions
+ * - mail: Stores email records for Firebase Extension delivery
+ */
+
 import { doc, setDoc, collection, getDoc, updateDoc, query, where, getDocs, writeBatch } from "firebase/firestore"
 import { db } from "../firebase/firebase"
 import { findAssetInstanceBySerialCode, updateAssetInstanceCondition, syncMasterAvailableCount } from "./equipmentHelper"

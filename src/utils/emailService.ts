@@ -1,3 +1,28 @@
+/**
+ * EMAIL SERVICE
+ * ==============
+ * 
+ * Sends emails using Firebase Extension (cloud-functions-for-firebase).
+ * 
+ * How It Works:
+ * 1. Create email document in 'mail' collection with recipient and content
+ * 2. Firebase Extension reads the document
+ * 3. Extension sends email via configured SMTP provider
+ * 4. Document is updated with status (success/failed)
+ * 
+ * Email Templates:
+ * - Borrow confirmation email
+ * - Return reminder email (sent 30 mins before expected return time)
+ * - Room booking confirmation
+ * - Room booking approval/cancellation
+ * 
+ * Collections:
+ * - mail: Email queue documents
+ * 
+ * NOTE: Actual email sending is handled by Firebase Extension.
+ * This service only creates the request documents.
+ */
+
 import { addDoc, collection } from 'firebase/firestore'
 import { db } from '../firebase/firebase'
 

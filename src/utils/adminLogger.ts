@@ -1,3 +1,24 @@
+/**
+ * ADMIN ACTION AUDIT LOGGING
+ * ============================
+ * 
+ * Tracks all administrative actions for audit trail purposes.
+ * 
+ * Logged Actions:
+ * - Equipment: add, edit, delete, update
+ * - Rooms: add, edit, delete, update
+ * - Borrows: confirm, cancel, acknowledge
+ * - Equipment Types: add, edit, delete
+ * 
+ * Features:
+ * - Timestamps all actions
+ * - Records user information
+ * - Stores action details
+ * - User info caching (30-min TTL) to reduce Firestore reads
+ * 
+ * Collection: adminLog
+ */
+
 import { collection, addDoc, doc, getDoc } from 'firebase/firestore'
 import type { User } from 'firebase/auth'
 import { db } from '../firebase/firebase'

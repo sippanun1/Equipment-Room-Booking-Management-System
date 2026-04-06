@@ -1,3 +1,40 @@
+/**
+ * EQUIPMENT MANAGEMENT SYSTEM
+ * ==============================
+ * 
+ * TWO-COLLECTION ARCHITECTURE:
+ * 
+ * 1. CONSUMABLES & MAIN ITEMS (equipment collection)
+ *    - Documents: { id, name, category: 'consumable'|'main', quantity, unit, ... }
+ *    - Simple quantity tracking: total stock count
+ *    - No serial codes or condition tracking
+ *    - Examples: electrodes (rolls), oil (liters), wood (sheets)
+ * 
+ * 2. ASSETS (two related collections)
+ *    a) equipmentMaster: Master record for each asset type
+ *       - { id, name, category: 'asset', quantity, equipmentTypes, ... }
+ *       - quantity = total instances of this asset
+ *       - syncedQuantity/syncedAvailable = synced borrow counts
+ *    
+ *    b) assetInstances: Individual physical units
+ *       - { id, equipmentId, serialCode, available, condition, ... }
+ *       - serialCode = unique identifier (e.g., 'WM-001', 'LM-002')
+ *       - available = boolean (true if not borrowed)
+ *       - condition = optional condition report (good/damage/etc)
+ * 
+ * PERFORMANCE OPTIMIZATIONS:
+ * - Parallel collection queries (Promise.all for 3 collections)
+ * - Client-side caching with 5-minute TTL
+ * - Optional pagination support (slice-based, 30 items/page)
+ * - Only loads data when necessary (cache check first)
+ * 
+ * PAGINATION STRATEGY:
+ * - Loads all documents from Firestore (no limit() in queries)
+ * - Slices results in memory (pageLimit & pageIndex parameters)
+ * - Future: Can add limit() in queries for true server-side pagination
+ * - Returns: { items: [...], hasMore: boolean, total: number }
+ */
+
 import { collection, getDocs, getDoc, addDoc, query, where, updateDoc, doc, deleteDoc, writeBatch } from 'firebase/firestore'
 import { db } from '../firebase/firebase'
 
