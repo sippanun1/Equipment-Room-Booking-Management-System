@@ -62,12 +62,17 @@ export interface EquipmentDisplay {
  * Load all equipment including consumables, assets, and their instances
  * WITH CACHING: Returns cached data if available (TTL: 5 minutes)
  * BATCHED: All three collections read together to minimize round trips
+ * WITH PAGINATION: Optional limit parameter for paginated loading
  */
-export async function loadAllEquipment(useCache = true): Promise<EquipmentDisplay[]> {
+export async function loadAllEquipment(useCache = true, pageLimit?: number, pageIndex = 0): Promise<{ items: EquipmentDisplay[]; hasMore: boolean; total: number }> {
   try {
-    // Check cache first
-    if (useCache && equipmentCache && Date.now() - equipmentCache.timestamp < CACHE_TTL) {
-      return equipmentCache.data
+    // Check cache first (only if no pagination)
+    if (useCache && !pageLimit && equipmentCache && Date.now() - equipmentCache.timestamp < CACHE_TTL) {
+      return {
+        items: equipmentCache.data,
+        hasMore: false,
+        total: equipmentCache.data.length
+      }
     }
 
     const results: EquipmentDisplay[] = []
@@ -168,16 +173,28 @@ export async function loadAllEquipment(useCache = true): Promise<EquipmentDispla
       })
     })
 
-    // Cache the results
-    equipmentCache = {
-      data: results,
-      timestamp: Date.now()
+    // Apply pagination if limit is specified
+    const startIndex = pageLimit ? pageIndex * pageLimit : 0
+    const endIndex = pageLimit ? startIndex + pageLimit : results.length
+    const paginatedResults = results.slice(startIndex, endIndex)
+    const hasMore = pageLimit ? endIndex < results.length : false
+
+    // Cache the full results only if not paginating
+    if (!pageLimit) {
+      equipmentCache = {
+        data: results,
+        timestamp: Date.now()
+      }
     }
 
-    return results
+    return {
+      items: paginatedResults,
+      hasMore: hasMore,
+      total: results.length
+    }
   } catch (error) {
     console.error('Error loading equipment:', error)
-    return []
+    return { items: [], hasMore: false, total: 0 }
   }
 }
 

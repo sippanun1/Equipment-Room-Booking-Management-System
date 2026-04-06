@@ -63,7 +63,8 @@ export default function AdminDashboard() {
     const loadEquipmentStatus = async () => {
       try {
         // Load all equipment with proper caching and synced counts
-        const allEquipment = await loadAllEquipment()
+        const result = await loadAllEquipment()
+        const allEquipment = result.items
 
         // Filter low stock items (consumables with quantity < threshold)
         const LOW_STOCK_THRESHOLD = 10

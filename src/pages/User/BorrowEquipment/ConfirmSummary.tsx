@@ -121,7 +121,8 @@ export default function ConfirmSummary({ cartItems }: ConfirmSummaryProps) {
     setIsSubmitting(true)
     try {
       // First, validate that enough equipment codes are available
-      const equipmentList = await loadAllEquipment(true) // Force fresh data
+      const result = await loadAllEquipment(true) // Force fresh data
+      const equipmentList = result.items
       
       for (const item of cartItems) {
         if (item.category === "asset") {

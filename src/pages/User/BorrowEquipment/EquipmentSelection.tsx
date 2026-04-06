@@ -110,7 +110,8 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
 
         // Phase 2: Full load including assets
         try {
-          const allEquipment = await loadAllEquipment()
+          const result = await loadAllEquipment()
+          const allEquipment = result.items
           
           // Step 1: Filter out unavailable items
           const filtered = allEquipment.filter(item => {
@@ -176,7 +177,8 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
       setLoadingAssets(true)
       setLoadingAssetsError(false)
 
-      const allEquipment = await loadAllEquipment()
+      const result = await loadAllEquipment()
+      const allEquipment = result.items
       
       // Step 1: Filter out unavailable items
       const filtered = allEquipment.filter(item => {

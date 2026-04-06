@@ -163,6 +163,11 @@ export default function AdminManageEquipment() {
   const [loading, setLoading] = useState(true)
   const [loadingAssets, setLoadingAssets] = useState(false)
   const [loadingAssetsError, setLoadingAssetsError] = useState(false)
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(0)
+  const pageSize = 30 // Items per page
+  const [hasMore, setHasMore] = useState(false)
+  const [totalEquipmentCount, setTotalEquipmentCount] = useState(0)
 
   // Load equipment from Firestore — two-phase: consumables first, then full load
   const loadEquipment = async (skipCache = false) => {
@@ -190,9 +195,18 @@ export default function AdminManageEquipment() {
 
       // Phase 2: Full load including assets (equipmentMaster + assetInstances)
       try {
-        const equipmentList = await loadAllEquipment(!skipCache)
-        setEquipment(equipmentList as Equipment[])
-        return equipmentList
+        const result = await loadAllEquipment(!skipCache, pageSize, currentPage)
+        const paginatedList = result.items
+        setHasMore(result.hasMore)
+        setTotalEquipmentCount(result.total)
+        
+        // If on first page (currentPage === 0), replace equipment. Otherwise, append.
+        if (currentPage === 0) {
+          setEquipment(paginatedList as Equipment[])
+        } else {
+          setEquipment(prev => [...prev, ...paginatedList as Equipment[]])
+        }
+        return paginatedList
       } catch (phase2Error) {
         console.error("Error loading assets (phase 2):", phase2Error)
         setLoadingAssetsError(true)
@@ -224,6 +238,18 @@ export default function AdminManageEquipment() {
   useEffect(() => {
     loadEquipment(true) // Force skip cache on mount
   }, [])
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(0)
+  }, [selectedCategory, selectedStockStatus, selectedEquipmentType, selectedEquipmentSubType, searchTerm])
+
+  // Load next page when currentPage changes (but not on initial load)
+  useEffect(() => {
+    if (currentPage > 0) {
+      loadEquipment(true) // Skip cache for paginated loads
+    }
+  }, [currentPage])
 
   const categories = [
     { key: "all", label: "ทั้งหมด" },
@@ -1500,6 +1526,28 @@ export default function AdminManageEquipment() {
                 ไม่พบอุปกรณ์ที่ค้นหา
               </div>
             ) : null}
+            
+            {/* Pagination Info and Load More Button */}
+            {!loading && filteredEquipment.length > 0 && hasMore && (
+              <div className="w-full flex flex-col items-center gap-3 py-4">
+                <p className="text-xs text-gray-600">
+                  แสดง {equipment.length} จาก {totalEquipmentCount} รายการ
+                </p>
+                <button
+                  onClick={() => setCurrentPage(prev => prev + 1)}
+                  disabled={loadingAssets}
+                  className={`
+                    px-6 py-2 rounded-lg font-medium text-sm transition
+                    ${loadingAssets
+                      ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                    }
+                  `}
+                >
+                  {loadingAssets ? 'กำลังโหลด...' : 'โหลดรายการเพิ่มเติม'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

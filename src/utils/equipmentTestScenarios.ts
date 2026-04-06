@@ -220,7 +220,8 @@ export async function testLoadEquipment(): Promise<{
   try {
     console.log('🧪 TEST 3: Loading and verifying equipment structure...')
 
-    const equipment = await loadAllEquipment()
+    const equipmentResult = await loadAllEquipment()
+    const equipment = equipmentResult.items
     result.totalEquipment = equipment.length
 
     for (const item of equipment) {
@@ -396,7 +397,8 @@ export async function cleanupTestData(createdAssetIds: string[], createdConsumab
     console.log('🧹 Cleaning up test data...')
 
     // Get all equipment and delete test items
-    const allEquipment = await loadAllEquipment()
+    const equipmentResult = await loadAllEquipment()
+    const allEquipment = equipmentResult.items
 
     for (const equipment of allEquipment) {
       const isTestAsset = createdAssetIds.includes(equipment.id)
