@@ -74,9 +74,10 @@ async function migrateCollection(
       const downloadUrl = await uploadBase64(value, storageKey)
       await updateDoc(doc(db, collectionName, docSnap.id), { [fieldName]: downloadUrl })
       result.migrated++
-    } catch (err: any) {
+    } catch (err) {
+      const error = err as Error | { message?: string }
       result.failed++
-      result.errors.push(`${collectionName}/${docSnap.id}: ${err?.message ?? err}`)
+      result.errors.push(`${collectionName}/${docSnap.id}: ${error?.message ?? String(err)}`)
       console.error(`Migration failed for ${collectionName}/${docSnap.id}:`, err)
     }
   }

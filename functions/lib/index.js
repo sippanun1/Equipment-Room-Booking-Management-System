@@ -1,8 +1,9 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import * as admin from 'firebase-admin';
+import { initializeApp } from 'firebase-admin/app';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 // Initialize Firebase Admin
-admin.initializeApp();
-const db = admin.firestore();
+initializeApp();
+const db = getFirestore();
 // Helper function to send email via mail collection
 async function sendBorrowReturnReminderEmail(userEmail, userName, equipmentNames, expectedReturnTime) {
     try {
@@ -78,7 +79,7 @@ export const sendBorrowReturnReminders = onSchedule('every 5 minutes', async (co
                 // Mark reminder as sent
                 await db.collection('borrowHistory').doc(doc.id).update({
                     reminderSent: true,
-                    reminderSentAt: admin.firestore.FieldValue.serverTimestamp()
+                    reminderSentAt: FieldValue.serverTimestamp()
                 });
                 results.push({
                     borrowId: doc.id,

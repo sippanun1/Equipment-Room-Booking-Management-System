@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { collection, query, where, getDocs, doc, updateDoc } from "firebase/firestore"
 import { db } from "../../../firebase/firebase"
@@ -31,6 +31,7 @@ interface RoomBooking {
   cancelledBy?: string
   cancelledByType?: "admin" | "user"
   cancelledAt?: string
+  bookingCode?: string
 }
 
 interface MyRoomBookingsProps {
@@ -49,11 +50,7 @@ export default function MyRoomBookings({ setReturnBookingData }: MyRoomBookingsP
   const [bookingToCancel, setBookingToCancel] = useState<RoomBooking | null>(null)
   const [isCancelling, setIsCancelling] = useState(false)
 
-  useEffect(() => {
-    fetchMyBookings()
-  }, [user])
-
-  const fetchMyBookings = async () => {
+  const fetchMyBookings = useCallback(async () => {
     if (!user?.uid) {
       setBookings([])
       setLoading(false)
@@ -108,7 +105,11 @@ export default function MyRoomBookings({ setReturnBookingData }: MyRoomBookingsP
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
+
+  useEffect(() => {
+    fetchMyBookings()
+  }, [fetchMyBookings])
 
   const formatThaiDate = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -349,7 +350,7 @@ export default function MyRoomBookings({ setReturnBookingData }: MyRoomBookingsP
                             setReturnBookingData({
                               ...booking,
                               room: booking.room
-                            } as any)
+                            } as ReturnBookingData)
                             navigate('/room-booking/return')
                           } else if (booking.status === "returned" || booking.status === "cancelled" || booking.status === "completed") {
                             setSelectedBooking(booking)

@@ -89,23 +89,27 @@ export default function BorrowReturnHistory() {
     today.setHours(0, 0, 0, 0)
     
     switch (dateFilter) {
-      case 'today':
+      case 'today': {
         const todayEnd = new Date(today)
         todayEnd.setHours(23, 59, 59, 999)
         return txnDate >= today && txnDate <= todayEnd
-      case 'week':
+      }
+      case 'week': {
         const weekAgo = new Date(today)
         weekAgo.setDate(weekAgo.getDate() - 7)
         return txnDate >= weekAgo
-      case 'month':
+      }
+      case 'month': {
         const monthAgo = new Date(today)
         monthAgo.setMonth(monthAgo.getMonth() - 1)
         return txnDate >= monthAgo
-      case 'custom':
+      }
+      case 'custom': {
         if (!customStartDate && !customEndDate) return true
         const start = customStartDate ? new Date(customStartDate) : new Date('1970-01-01')
         const end = customEndDate ? new Date(customEndDate + 'T23:59:59') : new Date()
         return txnDate >= start && txnDate <= end
+      }
       default:
         return true
     }

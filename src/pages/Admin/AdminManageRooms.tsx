@@ -226,7 +226,7 @@ export default function AdminManageRooms() {
         code: room.code,
         type: room.type,
         customType: room.type === "ห้องอื่นๆ" ? room.type : "",
-        image: (room as any).image || "",
+        image: (room as { image?: string }).image || "",
         usageDays: room.usageDays || {
           monday: true,
           tuesday: true,
@@ -339,7 +339,7 @@ export default function AdminManageRooms() {
     try {
       if (editingRoomId) {
         // Edit existing room in Firebase
-        const updateData: any = {
+        const updateData: { code: string; type: string; usageDays?: Record<string, boolean>; timeRanges?: Record<string, { start: string; end: string }>; image?: string } = {
           code: formData.code,
           type: finalType,
           usageDays: formData.usageDays,
@@ -370,7 +370,7 @@ export default function AdminManageRooms() {
         setOriginalFormData(null)
       } else {
         // Add new room to Firebase
-        const newRoomData: any = {
+        const newRoomData: { code: string; type: string; status: string; usageDays?: Record<string, boolean>; timeRanges?: Record<string, { start: string; end: string }>; image?: string } = {
           code: formData.code,
           type: finalType,
           status: "ว่าง",

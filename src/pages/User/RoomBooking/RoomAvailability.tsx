@@ -201,7 +201,7 @@ export default function RoomAvailability({ setBookingData }: RoomAvailabilityPro
             id: room.id,
             name: room.code,
             code: room.code,
-            image: (room as any).image || "🏢",
+            image: (room as { image?: string }).image || "🏏",
             badge: room.type.substring(0, 4),
             badgeColor: isOpen ? "bg-green-500" : "bg-red-500",
             timeSlots,

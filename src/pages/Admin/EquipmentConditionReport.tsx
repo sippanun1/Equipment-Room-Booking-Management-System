@@ -261,12 +261,12 @@ export default function EquipmentConditionReport() {
   }
 
   const filteredEquipment = {
-    ชำรุด: groupedByCondition.ชำรุด.filter(_e => 
+    ชำรุด: groupedByCondition.ชำรุด.filter(() => 
       filter === 'all' || filter === 'ชำรุด'
     ).filter(e =>
       e.equipmentName.toLowerCase().includes(searchTerm.toLowerCase())
     ),
-    สูญหาย: groupedByCondition.สูญหาย.filter(_e => 
+    สูญหาย: groupedByCondition.สูญหาย.filter(() => 
       filter === 'all' || filter === 'สูญหาย'
     ).filter(e =>
       e.equipmentName.toLowerCase().includes(searchTerm.toLowerCase())
@@ -337,7 +337,7 @@ export default function EquipmentConditionReport() {
         // Otherwise, mark as "acknowledged"
         const newConditionIssueStatus = newCondition === "ปกติ" ? "fixed" : "acknowledged"
         
-        const updatePayload: any = { 
+        const updatePayload: { equipmentItems: BorrowTransaction['equipmentItems']; conditionIssueStatus: string; conditionAcknowledgedBy?: string; conditionAcknowledgedByEmail?: string; conditionAcknowledgedAt?: number } = { 
           equipmentItems: updatedItems,
           conditionIssueStatus: newConditionIssueStatus,
           conditionAcknowledgedBy: user?.displayName || 'Unknown',

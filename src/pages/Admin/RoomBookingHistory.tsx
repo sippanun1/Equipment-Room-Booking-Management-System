@@ -368,23 +368,27 @@ export default function RoomBookingHistory() {
     today.setHours(0, 0, 0, 0)
     
     switch (dateFilter) {
-      case 'today':
+      case 'today': {
         const todayEnd = new Date(today)
         todayEnd.setHours(23, 59, 59, 999)
         return recordDate >= today && recordDate <= todayEnd
-      case 'week':
+      }
+      case 'week': {
         const weekAgo = new Date(today)
         weekAgo.setDate(weekAgo.getDate() - 7)
         return recordDate >= weekAgo
-      case 'month':
+      }
+      case 'month': {
         const monthAgo = new Date(today)
         monthAgo.setMonth(monthAgo.getMonth() - 1)
         return recordDate >= monthAgo
-      case 'custom':
+      }
+      case 'custom': {
         if (!customStartDate && !customEndDate) return true
         const start = customStartDate ? new Date(customStartDate) : new Date('1970-01-01')
         const end = customEndDate ? new Date(customEndDate + 'T23:59:59') : new Date()
         return recordDate >= start && recordDate <= end
+      }
       default:
         return true
     }

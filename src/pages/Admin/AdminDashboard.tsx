@@ -7,25 +7,26 @@ import Header from "../../components/Header"
 import { loadAllEquipment } from "../../utils/equipmentHelper"
 
 // Cache configuration
-interface CacheData {
-  data: any
+interface CacheData<T> {
+  data: T
   timestamp: number
 }
 
-const dashboardCache: { lowStock?: CacheData; pendingBookings?: CacheData; outOfStockAssets?: CacheData } = {}
+const dashboardCache: { lowStock?: CacheData<Equipment[]>; pendingBookings?: CacheData<RoomBooking[]>; outOfStockAssets?: CacheData<Equipment[]> } = {}
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
-const getCachedData = (key: 'lowStock' | 'pendingBookings' | 'outOfStockAssets'): any => {
-  const cached = dashboardCache[key]
+const getCachedData = <T,>(key: 'lowStock' | 'pendingBookings' | 'outOfStockAssets'): T | null => {
+  const cached = dashboardCache[key as keyof typeof dashboardCache]
   if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
     console.log(`Using cached ${key}`)
-    return cached.data
+    return cached.data as T
   }
   return null
 }
 
-const setCachedData = (key: 'lowStock' | 'pendingBookings' | 'outOfStockAssets', data: any) => {
-  dashboardCache[key] = { data, timestamp: Date.now() }
+const setCachedData = <T,>(key: 'lowStock' | 'pendingBookings' | 'outOfStockAssets', data: T) => {
+  const cache = dashboardCache as Record<string, CacheData<unknown>>
+  cache[key] = { data, timestamp: Date.now() }
 }
 
 interface Equipment {
@@ -98,7 +99,7 @@ export default function AdminDashboard() {
     const loadPendingBookings = async () => {
       try {
         // Check cache first
-        const cached = getCachedData('pendingBookings')
+        const cached = getCachedData<RoomBooking[]>('pendingBookings')
         if (cached) {
           setPendingBookings(cached)
           return

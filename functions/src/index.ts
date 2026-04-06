@@ -1,11 +1,16 @@
-import * as functions from 'firebase-functions'
 import { onSchedule } from 'firebase-functions/v2/scheduler'
-import * as admin from 'firebase-admin'
+import { initializeApp } from 'firebase-admin/app'
+import { getFirestore, FieldValue } from 'firebase-admin/firestore'
 
 // Initialize Firebase Admin
-admin.initializeApp()
+initializeApp()
 
-const db = admin.firestore()
+const db = getFirestore()
+
+interface EquipmentItem {
+  equipmentName: string
+  quantityBorrowed: number
+}
 
 // Helper function to send email via mail collection
 async function sendBorrowReturnReminderEmail(
@@ -49,19 +54,14 @@ async function sendBorrowReturnReminderEmail(
 }
 
 // Scheduled function to send reminder emails 30 minutes before return time
-export const sendBorrowReturnReminders = onSchedule('every 5 minutes', async (context) => {
+export const sendBorrowReturnReminders = onSchedule('every 5 minutes', async () => {
     try {
       const now = new Date()
-      const thirtyMinutesLater = new Date(now.getTime() + 30 * 60 * 1000)
 
       // Format times for comparison (HH:mm format)
       const currentHour = String(now.getHours()).padStart(2, '0')
       const currentMinute = String(now.getMinutes()).padStart(2, '0')
-      const currentTimeString = `${currentHour}:${currentMinute}`
-
-      const targetHour = String(thirtyMinutesLater.getHours()).padStart(2, '0')
-      const targetMinute = String(thirtyMinutesLater.getMinutes()).padStart(2, '0')
-      const targetTimeString = `${targetHour}:${targetMinute}`
+      const targetTimeString = `${currentHour}:${currentMinute}`
 
       // Get today's date in YYYY-MM-DD format
       const todayDate = now.toISOString().split('T')[0]
@@ -86,7 +86,7 @@ export const sendBorrowReturnReminders = onSchedule('every 5 minutes', async (co
 
         // Extract equipment names
         const equipmentNames = borrowData.equipmentItems
-          ? borrowData.equipmentItems.map((item: any) => `${item.equipmentName} (${item.quantityBorrowed} ชิ้น)`)
+          ? borrowData.equipmentItems.map((item: EquipmentItem) => `${item.equipmentName} (${item.quantityBorrowed} ชิ้น)`)
           : []
 
         // Send email
@@ -101,7 +101,7 @@ export const sendBorrowReturnReminders = onSchedule('every 5 minutes', async (co
           // Mark reminder as sent
           await db.collection('borrowHistory').doc(doc.id).update({
             reminderSent: true,
-            reminderSentAt: admin.firestore.FieldValue.serverTimestamp()
+            reminderSentAt: FieldValue.serverTimestamp()
           })
 
           results.push({

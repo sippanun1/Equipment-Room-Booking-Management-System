@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useNavigate } from "react-router-dom"
 import { collection, getDocs } from "firebase/firestore"
 import { db } from "../../../firebase/firebase"
@@ -77,7 +77,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
   useEffect(() => {
     const loadEquipment = async () => {
       try {
-        // Phase 1: fetch consumables quickly
+        // Phase 1: Load consumables quickly
         const quickSnap = await getDocs(collection(db, "equipment"))
         const quickItems: Equipment[] = []
         quickSnap.forEach((docSnap) => {
@@ -275,30 +275,69 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
     setSelectedSubType("ทั้งหมด")
   }, [selectedType])
 
+  // Get available types based on current category and search filters (before type filter applied)
+  const availableTypes = useMemo(() => {
+    const types = new Set<string>()
+    let baseFiltered = equipmentData
+
+    // Apply category filter
+    if (selectedCategory !== "all") {
+      baseFiltered = baseFiltered.filter(item => item.category === selectedCategory)
+    }
+
+    // Apply search filter
+    if (searchTerm) {
+      baseFiltered = baseFiltered.filter(item =>
+        item.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    }
+
+    // Collect all types from filtered equipment
+    baseFiltered.forEach(item => {
+      if (item.equipmentTypes && Array.isArray(item.equipmentTypes)) {
+        item.equipmentTypes.forEach(type => types.add(type))
+      }
+    })
+
+    return Array.from(types).sort()
+  }, [equipmentData, selectedCategory, searchTerm])
+
+  // Get available subtypes based on selected type and current filters
+  const availableSubTypes = useMemo(() => {
+    if (selectedType === "ทั้งหมด") return []
+    
+    const subTypes = new Set<string>()
+    let baseFiltered = equipmentData
+
+    // Apply category filter
+    if (selectedCategory !== "all") {
+      baseFiltered = baseFiltered.filter(item => item.category === selectedCategory)
+    }
+
+    // Apply search filter
+    if (searchTerm) {
+      baseFiltered = baseFiltered.filter(item =>
+        item.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    }
+
+    // Apply selected type filter
+    baseFiltered = baseFiltered.filter(item => 
+      item.equipmentTypes?.includes(selectedType)
+    )
+
+    // Collect all subtypes from filtered equipment
+    baseFiltered.forEach(item => {
+      if (item.equipmentSubTypes && Array.isArray(item.equipmentSubTypes)) {
+        item.equipmentSubTypes.forEach(subType => subTypes.add(subType))
+      }
+    })
+
+    return Array.from(subTypes).sort()
+  }, [equipmentData, selectedCategory, selectedType, searchTerm])
+
   // Get only displayed items based on batches
   const displayedEquipment = filteredEquipment.slice(0, displayedBatches * ITEMS_PER_PAGE)
-
-  // Get all unique equipment types from actual equipment data
-  const uniqueEquipmentTypes = Array.from(
-    new Set(
-      equipmentData
-        .filter(item => selectedCategory === "all" || item.category === selectedCategory)
-        .flatMap(item => item.equipmentTypes || [])
-    )
-  ).sort()
-
-  // Get all unique subtypes for selected type from actual equipment data
-  const uniqueSubTypes = Array.from(
-    new Set(
-      equipmentData
-        .filter(
-          item =>
-            (selectedCategory === "all" || item.category === selectedCategory) &&
-            item.equipmentTypes?.includes(selectedType)
-        )
-        .flatMap(item => item.equipmentSubTypes || [])
-    )
-  ).sort()
 
   const handleAddQuantity = (equipmentId: string) => {
     const equipment = equipmentData.find(e => e.id === equipmentId)
@@ -498,7 +537,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                 </div>
 
                 {/* Type Filters */}
-                {uniqueEquipmentTypes.length > 0 && (
+                {availableTypes.length > 0 && (
                   <div className="mb-4">
                     <p className="text-xs font-semibold text-gray-600 mb-2">ประเภทอุปกรณ์:</p>
                     <div className="flex gap-2 flex-wrap">
@@ -515,7 +554,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                       >
                         ทั้งหมด
                       </button>
-                      {uniqueEquipmentTypes.map((type) => (
+                      {availableTypes.map((type) => (
                         <button
                           key={type}
                           onClick={() => { setSelectedType(type); setSelectedSubType("ทั้งหมด") }}
@@ -536,7 +575,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                 )}
 
                 {/* SubType Filters */}
-                {selectedType !== "ทั้งหมด" && uniqueSubTypes.length > 0 && (
+                {selectedType !== "ทั้งหมด" && availableSubTypes.length > 0 && (
                   <div className="mb-4">
                     <p className="text-xs font-semibold text-gray-600 mb-2">ประเภทย่อย:</p>
                     <div className="flex gap-2 flex-wrap">
@@ -553,7 +592,7 @@ export default function EquipmentSelection({ setCartItems }: EquipmentSelectionP
                       >
                         ทั้งหมด
                       </button>
-                      {uniqueSubTypes.map((subType) => (
+                      {availableSubTypes.map((subType) => (
                         <button
                           key={subType}
                           onClick={() => setSelectedSubType(subType)}

@@ -151,7 +151,7 @@ export default function RoomBookingForm({
     }
 
     fetchBookedTimes()
-  }, [date, bookingData?.room])
+  }, [date, bookingData?.room, startTime])
 
   // Format time key from "HH:00" format
   const getTimeKey = (time: string) => {
